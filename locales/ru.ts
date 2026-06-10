@@ -209,6 +209,7 @@ const ru = {
   "profile.experiences": "Впечатления",
   "profile.photos": "Фото",
   "profile.followers": "Подписчики",
+  "profile.partnerPosts": "Посты у партнёров",
   "profile.badges": "Мои значки",
   "profile.myReservations": "Мои бронирования",
   "profile.favorites": "Избранное",

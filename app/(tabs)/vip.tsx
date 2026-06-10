@@ -28,11 +28,11 @@ type TierKey = "bronze" | "silver" | "gold" | "platinum";
 // --- Tier system ---
 const VIP_TIERS: Record<TierKey, {
   label: string; color: string; bg: string; icon: string;
-  followers: string; perks: string[];
+  requirement: string; perks: string[];
 }> = {
   bronze: {
     label: "Bronze", color: "#CD7F32", bg: "rgba(205,127,50,0.12)", icon: "🥉",
-    followers: "< 1 000 abonnés",
+    requirement: "0 – 4 posts",
     perks: [
       "Liste prioritaire pour les réservations",
       "5% de réduction sur les venues sélectionnées",
@@ -42,7 +42,7 @@ const VIP_TIERS: Record<TierKey, {
   },
   silver: {
     label: "Silver", color: "#A8A9AD", bg: "rgba(168,169,173,0.12)", icon: "🥈",
-    followers: "1K – 10K abonnés",
+    requirement: "5 – 14 posts",
     perks: [
       "Toutes les offres Bronze",
       "File prioritaire dans tous les venues partenaires",
@@ -53,7 +53,7 @@ const VIP_TIERS: Record<TierKey, {
   },
   gold: {
     label: "Gold", color: "#D4AF37", bg: "rgba(212,175,55,0.12)", icon: "🥇",
-    followers: "10K – 50K abonnés",
+    requirement: "15 – 29 posts",
     perks: [
       "Toutes les offres Silver",
       "20% de réduction exclusive sur toutes les venues",
@@ -65,7 +65,7 @@ const VIP_TIERS: Record<TierKey, {
   },
   platinum: {
     label: "Platinum", color: "#E8E8E8", bg: "rgba(232,232,232,0.12)", icon: "💎",
-    followers: "50K+ abonnés",
+    requirement: "30+ posts",
     perks: [
       "Toutes les offres Gold",
       "40% de réduction exclusive — le meilleur tarif",
@@ -292,8 +292,22 @@ function DiscountCard({
   );
 }
 
-function TierBadge({ tier, colors }: { tier: TierKey; colors: ReturnType<typeof useColors> }) {
+// Seuil (nombre de posts) pour atteindre le tier suivant
+const TIER_NEXT: Record<TierKey, { label: string; at: number } | null> = {
+  bronze:   { label: "Silver",   at: 5 },
+  silver:   { label: "Gold",     at: 15 },
+  gold:     { label: "Platinum", at: 30 },
+  platinum: null,
+};
+const TIER_FLOOR: Record<TierKey, number> = { bronze: 0, silver: 5, gold: 15, platinum: 30 };
+
+function TierBadge({ tier, posts, colors }: { tier: TierKey; posts: number; colors: ReturnType<typeof useColors> }) {
   const t = VIP_TIERS[tier];
+  const next = TIER_NEXT[tier];
+  const floor = TIER_FLOOR[tier];
+  const remaining = next ? Math.max(0, next.at - posts) : 0;
+  const progress = next ? Math.min(1, (posts - floor) / (next.at - floor)) : 1;
+
   return (
     <View style={{
       backgroundColor: t.bg, borderWidth: 1, borderColor: t.color,
@@ -301,12 +315,29 @@ function TierBadge({ tier, colors }: { tier: TierKey; colors: ReturnType<typeof 
     }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 }}>
         <Text style={{ fontSize: 32 }}>{t.icon}</Text>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600" }}>TON NIVEAU ACTUEL</Text>
           <Text style={{ fontSize: 22, fontWeight: "800", color: t.color }}>{t.label}</Text>
-          <Text style={{ fontSize: 12, color: colors.muted }}>{t.followers}</Text>
+          <Text style={{ fontSize: 12, color: colors.muted }}>{t.requirement}</Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: t.color }}>{posts}</Text>
+          <Text style={{ fontSize: 10, color: colors.muted }}>posts partenaires</Text>
         </View>
       </View>
+
+      {/* Progression vers le tier suivant */}
+      <View style={{ marginBottom: 14 }}>
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <View style={{ width: `${progress * 100}%`, height: "100%", backgroundColor: t.color }} />
+        </View>
+        <Text style={{ fontSize: 11, color: colors.muted, marginTop: 6 }}>
+          {next
+            ? `Plus que ${remaining} post${remaining > 1 ? "s" : ""} pour atteindre ${next.label}`
+            : "Niveau maximum atteint — merci pour ton soutien ! 🎉"}
+        </Text>
+      </View>
+
       <View style={{ gap: 6 }}>
         {t.perks.map((perk) => (
           <View key={perk} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -338,7 +369,7 @@ function TierComparisonRow({ colors }: { colors: ReturnType<typeof useColors> })
               <Text style={{ fontSize: 15, fontWeight: "800", color: tier.color, marginBottom: 2 }}>
                 {tier.label}
               </Text>
-              <Text style={{ fontSize: 11, color: colors.muted, marginBottom: 10 }}>{tier.followers}</Text>
+              <Text style={{ fontSize: 11, color: colors.muted, marginBottom: 10 }}>{tier.requirement}</Text>
               {tier.perks.slice(0, 3).map((perk) => (
                 <View key={perk} style={{ flexDirection: "row", gap: 6, marginBottom: 4 }}>
                   <Text style={{ color: tier.color, fontSize: 11 }}>✓</Text>
@@ -511,11 +542,12 @@ export default function VipScreen() {
 
   const isInstagramUser = isDemoMode || (isAuthenticated && user?.loginMethod === "instagram");
 
-  const followerCount = isDemoMode ? 12500 : (user as any)?.followerCount ?? 0;
+  // Nombre de posts Instagram taguant des établissements partenaires.
+  const partnerPosts = isDemoMode ? 18 : (user as any)?.partnerPostCount ?? 0;
   const currentTier: TierKey =
-    followerCount >= 50000 ? "platinum" :
-    followerCount >= 10000 ? "gold" :
-    followerCount >= 1000  ? "silver" : "bronze";
+    partnerPosts >= 30 ? "platinum" :
+    partnerPosts >= 15 ? "gold" :
+    partnerPosts >= 5  ? "silver" : "bronze";
 
   const handleBook = useCallback((item: VipOffer) => {
     router.push({
@@ -527,7 +559,7 @@ export default function VipScreen() {
         date:            item.event_date,
         type:            item.offer_type,
         instagramHandle: item.instagram_handle ?? "",
-        requirement:     `Follow ${item.instagram_handle} + poste une story ou reel le soir même`,
+        requirement:     `Poste une story ou un reel en taguant ${item.instagram_handle} le soir même`,
       },
     });
   }, [router]);
@@ -666,7 +698,7 @@ export default function VipScreen() {
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
               <View style={{ marginBottom: 4 }}>
-                <TierBadge tier={currentTier} colors={colors} />
+                <TierBadge tier={currentTier} posts={partnerPosts} colors={colors} />
                 <TierComparisonRow colors={colors} />
                 <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
                   Avantages Membres

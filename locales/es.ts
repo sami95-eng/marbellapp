@@ -209,6 +209,7 @@ const es = {
   "profile.experiences": "Experiencias",
   "profile.photos": "Fotos",
   "profile.followers": "Seguidores",
+  "profile.partnerPosts": "Posts en partners",
   "profile.badges": "Mis insignias",
   "profile.myReservations": "Mis reservas",
   "profile.favorites": "Favoritos",

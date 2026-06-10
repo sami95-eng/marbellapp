@@ -209,6 +209,7 @@ const fr = {
   "profile.experiences": "Expériences",
   "profile.photos": "Photos",
   "profile.followers": "Abonnés",
+  "profile.partnerPosts": "Posts partenaires",
   "profile.badges": "Mes badges",
   "profile.myReservations": "Mes réservations",
   "profile.favorites": "Favoris",

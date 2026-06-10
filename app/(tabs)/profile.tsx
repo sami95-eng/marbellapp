@@ -32,8 +32,8 @@ export default function ProfileScreen() {
 
   const STATS = [
     { label: t("profile.experiences"), value: completedCount > 0 ? String(completedCount) : "0", icon: "✨" },
-    { label: t("profile.photos"),      value: "47",   icon: "📸" },
-    { label: t("profile.followers"),   value: "3.2K", icon: "👥" },
+    { label: t("profile.photos"),        value: "47", icon: "📸" },
+    { label: t("profile.partnerPosts"),  value: "18", icon: "🏷️" },
   ];
 
   const MENU_ITEMS = [
