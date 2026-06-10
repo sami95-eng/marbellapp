@@ -1,0 +1,617 @@
+import { useState, useCallback } from "react";
+import {
+  Text,
+  View,
+  FlatList,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
+import { useDemo } from "@/lib/demo-context";
+import {
+  useVipData,
+  type VipOffer,
+  type VipEventDiscount,
+  type VipMemberPerk,
+} from "@/hooks/use-vip";
+
+type VipCategory = "tables" | "discounts" | "members";
+type TierKey = "bronze" | "silver" | "gold" | "platinum";
+
+// --- Tier system ---
+const VIP_TIERS: Record<TierKey, {
+  label: string; color: string; bg: string; icon: string;
+  followers: string; perks: string[];
+}> = {
+  bronze: {
+    label: "Bronze", color: "#CD7F32", bg: "rgba(205,127,50,0.12)", icon: "🥉",
+    followers: "< 1 000 abonnés",
+    perks: [
+      "Liste prioritaire pour les réservations",
+      "5% de réduction sur les venues sélectionnées",
+      "Newsletter exclusive Marbell'app",
+      "Accès aux offres de la semaine",
+    ],
+  },
+  silver: {
+    label: "Silver", color: "#A8A9AD", bg: "rgba(168,169,173,0.12)", icon: "🥈",
+    followers: "1K – 10K abonnés",
+    perks: [
+      "Toutes les offres Bronze",
+      "File prioritaire dans tous les venues partenaires",
+      "10% de réduction sur les tables VIP",
+      "Cocktail de bienvenue offert",
+      "Accès aux événements membres mensuels",
+    ],
+  },
+  gold: {
+    label: "Gold", color: "#D4AF37", bg: "rgba(212,175,55,0.12)", icon: "🥇",
+    followers: "10K – 50K abonnés",
+    perks: [
+      "Toutes les offres Silver",
+      "20% de réduction exclusive sur toutes les venues",
+      "Bouteille offerte pour toute table VIP",
+      "Réservation prioritaire 48h avant l'ouverture",
+      "Accès aux événements privés Gold",
+      "Upgrade automatique à la meilleure table disponible",
+    ],
+  },
+  platinum: {
+    label: "Platinum", color: "#E8E8E8", bg: "rgba(232,232,232,0.12)", icon: "💎",
+    followers: "50K+ abonnés",
+    perks: [
+      "Toutes les offres Gold",
+      "40% de réduction exclusive — le meilleur tarif",
+      "Concierge personnel 24h/24 7j/7",
+      "Accès backstage aux événements Starlite",
+      "Dîners privés avec les chefs étoilés",
+      "Accès aux yachts privatisés Puerto Banús",
+      "Invitation aux galas et soirées fermées",
+    ],
+  },
+};
+
+// --- Sub-Components ---
+
+function CategoryTab({
+  label, icon, active, onPress, colors,
+}: {
+  label: string; icon: string; active: boolean; onPress: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={{
+        flex: 1, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 12,
+        backgroundColor: active ? colors.primary : colors.surface,
+        borderWidth: active ? 0 : 1, borderColor: colors.border,
+        alignItems: "center", gap: 4,
+      }}
+    >
+      <Text style={{ fontSize: 18 }}>{icon}</Text>
+      <Text style={{ fontSize: 11, fontWeight: active ? "700" : "500", color: active ? "#0A0E13" : colors.muted }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const OFFER_TYPE_ICONS: Record<string, string> = {
+  table: "🪑", bed: "🛏️", bottle: "🍾", private: "🔒",
+};
+const OFFER_TYPE_LABELS: Record<string, string> = {
+  table: "Table", bed: "Lit/Daybed", bottle: "Bouteille", private: "Privatif",
+};
+
+function VipOfferCard({
+  item, colors, onBook,
+}: {
+  item: VipOffer; colors: ReturnType<typeof useColors>; onBook: (item: VipOffer) => void;
+}) {
+  const savings = item.original_price - item.vip_price;
+  const savingsPercent = Math.round((savings / item.original_price) * 100);
+
+  return (
+    <View style={{
+      backgroundColor: colors.surface, borderRadius: 16, marginBottom: 16,
+      overflow: "hidden", borderWidth: 1, borderColor: colors.border,
+    }}>
+      <View style={{ position: "relative" }}>
+        <Image
+          source={{ uri: item.image_url ?? "" }}
+          style={{ width: "100%", height: 160 }}
+          contentFit="cover"
+        />
+        {item.tag && (
+          <View style={{
+            position: "absolute", top: 12, left: 12,
+            backgroundColor: item.tag === "LAST SPOT" ? "#EF4444" : item.tag === "EXCLUSIVE" || item.tag === "PREMIUM" ? "#7C3AED" : colors.primary,
+            paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+          }}>
+            <Text style={{ color: "#0A0E13", fontSize: 11, fontWeight: "800" }}>{item.tag}</Text>
+          </View>
+        )}
+        <View style={{
+          position: "absolute", top: 12, right: 12,
+          backgroundColor: "rgba(0,0,0,0.7)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+        }}>
+          <Text style={{ color: "#4ADE80", fontSize: 12, fontWeight: "700" }}>-{savingsPercent}%</Text>
+        </View>
+        <View style={{
+          position: "absolute", bottom: 12, left: 12,
+          backgroundColor: "rgba(0,0,0,0.65)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+          flexDirection: "row", alignItems: "center", gap: 4,
+        }}>
+          <Text style={{ fontSize: 12 }}>{OFFER_TYPE_ICONS[item.offer_type] ?? "🎯"}</Text>
+          <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600" }}>{OFFER_TYPE_LABELS[item.offer_type] ?? item.offer_type}</Text>
+        </View>
+      </View>
+
+      <View style={{ padding: 16 }}>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>{item.venue_name}</Text>
+        <Text style={{ fontSize: 13, color: colors.primary, marginTop: 2, fontWeight: "600" }}>{item.table_type}</Text>
+
+        <View style={{ flexDirection: "row", marginTop: 10, gap: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 14 }}>📅</Text>
+            <Text style={{ fontSize: 13, color: colors.muted }}>{item.event_date}</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 14 }}>🕐</Text>
+            <Text style={{ fontSize: 13, color: colors.muted }}>{item.event_time}</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 14 }}>👥</Text>
+            <Text style={{ fontSize: 13, color: colors.muted }}>≤ {item.capacity}</Text>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          {item.perks.map((perk) => (
+            <View key={perk} style={{
+              backgroundColor: "rgba(212,175,55,0.15)", paddingHorizontal: 8,
+              paddingVertical: 4, borderRadius: 6,
+            }}>
+              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>{perk}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={{
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14,
+        }}>
+          <View>
+            <Text style={{ fontSize: 13, color: colors.muted, textDecorationLine: "line-through" }}>
+              €{item.original_price}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+              <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary }}>€{item.vip_price}</Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>prix VIP</Text>
+            </View>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ fontSize: 11, color: item.spots_left <= 2 ? "#EF4444" : colors.muted, marginBottom: 6 }}>
+              {item.spots_left} place{item.spots_left > 1 ? "s" : ""} restante{item.spots_left > 1 ? "s" : ""}
+            </Text>
+            <TouchableOpacity
+              onPress={() => onBook(item)}
+              activeOpacity={0.7}
+              style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 10 }}
+            >
+              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>Réserver</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function DiscountCard({
+  item, colors, onCopy,
+}: {
+  item: VipEventDiscount; colors: ReturnType<typeof useColors>; onCopy: (code: string) => void;
+}) {
+  const discountedPrice = Math.round(item.original_price * (1 - item.discount_pct / 100));
+
+  return (
+    <View style={{
+      backgroundColor: colors.surface, borderRadius: 16, marginBottom: 16,
+      overflow: "hidden", borderWidth: 1, borderColor: colors.border,
+    }}>
+      <View style={{ position: "relative" }}>
+        <Image source={{ uri: item.image_url ?? "" }} style={{ width: "100%", height: 140 }} contentFit="cover" />
+        <View style={{
+          position: "absolute", top: 12, left: 12, backgroundColor: "#EF4444",
+          paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+        }}>
+          <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "800" }}>-{item.discount_pct}%</Text>
+        </View>
+        <View style={{
+          position: "absolute", bottom: 12, left: 12, backgroundColor: "rgba(0,0,0,0.7)",
+          paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
+        }}>
+          <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "600" }}>{item.category}</Text>
+        </View>
+      </View>
+
+      <View style={{ padding: 16 }}>
+        <Text style={{ fontSize: 17, fontWeight: "700", color: colors.foreground }}>{item.title}</Text>
+        <Text style={{ fontSize: 13, color: colors.primary, marginTop: 2 }}>{item.venue_name}</Text>
+        <Text style={{ fontSize: 13, color: colors.muted, marginTop: 6, lineHeight: 18 }}>{item.description}</Text>
+
+        <View style={{ flexDirection: "row", marginTop: 10, gap: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 13 }}>📅</Text>
+            <Text style={{ fontSize: 12, color: colors.muted }}>{item.event_date}</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 13 }}>⏰</Text>
+            <Text style={{ fontSize: 12, color: colors.muted }}>Jusqu'au {item.valid_until}</Text>
+          </View>
+        </View>
+
+        <View style={{
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+          marginTop: 14, backgroundColor: "rgba(212,175,55,0.1)", padding: 12, borderRadius: 10,
+          borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
+        }}>
+          <View>
+            <Text style={{ fontSize: 11, color: colors.muted }}>CODE PROMO</Text>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.primary, letterSpacing: 2 }}>
+              {item.code}
+            </Text>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+              <Text style={{ fontSize: 13, color: colors.muted, textDecorationLine: "line-through" }}>
+                €{item.original_price}
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: "800", color: colors.primary }}>€{discountedPrice}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => onCopy(item.code)}
+              activeOpacity={0.7}
+              style={{ backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8, marginTop: 4 }}
+            >
+              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>Copier</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TierBadge({ tier, colors }: { tier: TierKey; colors: ReturnType<typeof useColors> }) {
+  const t = VIP_TIERS[tier];
+  return (
+    <View style={{
+      backgroundColor: t.bg, borderWidth: 1, borderColor: t.color,
+      borderRadius: 12, padding: 16, marginBottom: 20,
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <Text style={{ fontSize: 32 }}>{t.icon}</Text>
+        <View>
+          <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600" }}>TON NIVEAU ACTUEL</Text>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: t.color }}>{t.label}</Text>
+          <Text style={{ fontSize: 12, color: colors.muted }}>{t.followers}</Text>
+        </View>
+      </View>
+      <View style={{ gap: 6 }}>
+        {t.perks.map((perk) => (
+          <View key={perk} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ color: t.color, fontSize: 13 }}>✓</Text>
+            <Text style={{ fontSize: 13, color: colors.foreground }}>{perk}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function TierComparisonRow({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const tierKeys: TierKey[] = ["bronze", "silver", "gold", "platinum"];
+  return (
+    <View style={{ marginBottom: 20 }}>
+      <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
+        Tous les niveaux
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+        {tierKeys.map((key) => {
+          const tier = VIP_TIERS[key];
+          return (
+            <View key={key} style={{
+              width: 180, backgroundColor: colors.surface, borderRadius: 12,
+              borderWidth: 1, borderColor: tier.color, padding: 14, marginHorizontal: 4,
+            }}>
+              <Text style={{ fontSize: 24, marginBottom: 6 }}>{tier.icon}</Text>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: tier.color, marginBottom: 2 }}>
+                {tier.label}
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.muted, marginBottom: 10 }}>{tier.followers}</Text>
+              {tier.perks.slice(0, 3).map((perk) => (
+                <View key={perk} style={{ flexDirection: "row", gap: 6, marginBottom: 4 }}>
+                  <Text style={{ color: tier.color, fontSize: 11 }}>✓</Text>
+                  <Text style={{ fontSize: 11, color: colors.muted, flex: 1 }}>{perk}</Text>
+                </View>
+              ))}
+              {tier.perks.length > 3 && (
+                <Text style={{ fontSize: 11, color: tier.color, marginTop: 4 }}>
+                  +{tier.perks.length - 3} autres avantages
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function MemberOfferCard({ item, colors }: { item: VipMemberPerk; colors: ReturnType<typeof useColors> }) {
+  const tier = VIP_TIERS[item.min_tier as TierKey] ?? VIP_TIERS.bronze;
+  return (
+    <View style={{
+      backgroundColor: colors.surface, borderRadius: 16, marginBottom: 16,
+      overflow: "hidden", borderWidth: 1, borderColor: tier.color,
+    }}>
+      <View style={{ position: "relative" }}>
+        <Image source={{ uri: item.image_url ?? "" }} style={{ width: "100%", height: 110 }} contentFit="cover" />
+        <View style={{
+          position: "absolute", top: 12, left: 12, backgroundColor: tier.color,
+          paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+          flexDirection: "row", alignItems: "center", gap: 4,
+        }}>
+          <Text style={{ fontSize: 12 }}>{tier.icon}</Text>
+          <Text style={{ color: "#0A0E13", fontSize: 11, fontWeight: "800" }}>{tier.label.toUpperCase()}</Text>
+        </View>
+        {item.is_new && (
+          <View style={{
+            position: "absolute", top: 12, right: 12, backgroundColor: "#EF4444",
+            paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+          }}>
+            <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>NEW</Text>
+          </View>
+        )}
+      </View>
+      <View style={{ padding: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, flex: 1 }}>{item.title}</Text>
+          <View style={{ backgroundColor: tier.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginLeft: 8 }}>
+            <Text style={{ fontSize: 11, color: tier.color, fontWeight: "700" }}>{item.benefit}</Text>
+          </View>
+        </View>
+        <Text style={{ fontSize: 12, color: colors.primary, marginTop: 2 }}>{item.venue_name}</Text>
+        <Text style={{ fontSize: 13, color: colors.muted, marginTop: 6, lineHeight: 18 }}>{item.description}</Text>
+      </View>
+    </View>
+  );
+}
+
+function InstagramGate({ isAuthenticated, router, colors }: {
+  isAuthenticated: boolean; router: ReturnType<typeof useRouter>; colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <ScreenContainer>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32, gap: 20 }}>
+        <Text style={{ fontSize: 56 }}>📸</Text>
+        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary, textAlign: "center" }}>
+          Accès VIP
+        </Text>
+        <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 22 }}>
+          {isAuthenticated
+            ? "Connecte ton compte Instagram pour débloquer les offres VIP et accéder aux tiers d'avantages."
+            : "Connecte-toi avec Instagram pour accéder aux offres VIP exclusives de Marbella."}
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.push("/login")}
+          style={{
+            backgroundColor: "#833AB4", borderRadius: 50, paddingVertical: 14,
+            paddingHorizontal: 32, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8,
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ fontSize: 18 }}>📸</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+            {isAuthenticated ? "Connecter Instagram" : "Se connecter avec Instagram"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </ScreenContainer>
+  );
+}
+
+// --- Main Screen ---
+export default function VipScreen() {
+  const router = useRouter();
+  const colors = useColors();
+  const { user, isAuthenticated } = useAuth();
+  const { isDemoMode } = useDemo();
+
+  const [activeCategory, setActiveCategory] = useState<VipCategory>("tables");
+
+  const { offers, discounts, perks, loading } = useVipData();
+
+  const isInstagramUser = isDemoMode || (isAuthenticated && user?.loginMethod === "instagram");
+
+  const followerCount = isDemoMode ? 12500 : (user as any)?.followerCount ?? 0;
+  const currentTier: TierKey =
+    followerCount >= 50000 ? "platinum" :
+    followerCount >= 10000 ? "gold" :
+    followerCount >= 1000  ? "silver" : "bronze";
+
+  const handleBook = useCallback((item: VipOffer) => {
+    router.push({
+      pathname: "/vip-qr",
+      params: {
+        offerId:         item.id,
+        offerTitle:      item.table_type,
+        venue:           item.venue_name,
+        date:            item.event_date,
+        type:            item.offer_type,
+        instagramHandle: item.instagram_handle ?? "",
+        requirement:     `Follow ${item.instagram_handle} + poste une story ou reel le soir même`,
+      },
+    });
+  }, [router]);
+
+  const handleCopyCode = useCallback((code: string) => {
+    if (Platform.OS === "web") {
+      try {
+        navigator.clipboard.writeText(code);
+        Alert.alert("Code copié !", `Code : ${code}`);
+      } catch {
+        Alert.alert("Code promo", `Code : ${code}`);
+      }
+    } else {
+      Alert.alert("Code copié !", `Code : ${code}`);
+    }
+  }, []);
+
+  const renderOfferItem = useCallback(
+    ({ item }: { item: VipOffer }) => (
+      <VipOfferCard item={item} colors={colors} onBook={handleBook} />
+    ),
+    [colors, handleBook]
+  );
+
+  const renderDiscountItem = useCallback(
+    ({ item }: { item: VipEventDiscount }) => (
+      <DiscountCard item={item} colors={colors} onCopy={handleCopyCode} />
+    ),
+    [colors, handleCopyCode]
+  );
+
+  const renderMemberItem = useCallback(
+    ({ item }: { item: VipMemberPerk }) => (
+      <MemberOfferCard item={item} colors={colors} />
+    ),
+    [colors]
+  );
+
+  if (!isInstagramUser) {
+    return <InstagramGate isAuthenticated={isAuthenticated} router={router} colors={colors} />;
+  }
+
+  if (loading) {
+    return (
+      <ScreenContainer>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <ActivityIndicator color="#D4AF37" size="large" />
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Chargement des offres VIP…</Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  return (
+    <ScreenContainer>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* Header */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, alignItems: "center" }}>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary }}>👑 VIP Access</Text>
+          <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
+            Offres exclusives · Réservé aux membres Instagram
+          </Text>
+        </View>
+
+        {/* Category Tabs */}
+        <View style={{ flexDirection: "row", paddingHorizontal: 20, gap: 8, marginBottom: 16 }}>
+          <CategoryTab label="Tables & Beds" icon="🍾" active={activeCategory === "tables"}
+            onPress={() => setActiveCategory("tables")} colors={colors} />
+          <CategoryTab label="Réductions" icon="🏷️" active={activeCategory === "discounts"}
+            onPress={() => setActiveCategory("discounts")} colors={colors} />
+          <CategoryTab label="Mon Tier" icon="💎" active={activeCategory === "members"}
+            onPress={() => setActiveCategory("members")} colors={colors} />
+        </View>
+
+        {activeCategory === "tables" && (
+          <FlatList
+            data={offers}
+            renderItem={renderOfferItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>
+                  Offres de la Semaine
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
+                  Tables · Daybeds · Bouteilles · Accès Privatifs
+                </Text>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Text style={{ fontSize: 36, marginBottom: 8 }}>🍾</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>Aucune offre disponible</Text>
+              </View>
+            }
+          />
+        )}
+
+        {activeCategory === "discounts" && (
+          <FlatList
+            data={discounts}
+            renderItem={renderDiscountItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>
+                  Codes & Réductions
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
+                  Présente le code au venue pour en bénéficier
+                </Text>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Text style={{ fontSize: 36, marginBottom: 8 }}>🏷️</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>Aucune réduction disponible</Text>
+              </View>
+            }
+          />
+        )}
+
+        {activeCategory === "members" && (
+          <FlatList
+            data={perks}
+            renderItem={renderMemberItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View style={{ marginBottom: 4 }}>
+                <TierBadge tier={currentTier} colors={colors} />
+                <TierComparisonRow colors={colors} />
+                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
+                  Avantages Membres
+                </Text>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Text style={{ fontSize: 36, marginBottom: 8 }}>💎</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>Aucun avantage disponible</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+    </ScreenContainer>
+  );
+}
