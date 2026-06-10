@@ -11,7 +11,7 @@ export default function VerifyEmailScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const email = params.email ?? user?.email ?? "";
 
-  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [code, setCode] = useState(["", "", "", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -22,17 +22,17 @@ export default function VerifyEmailScreen() {
     const digits = val.replace(/\D/g, "");
     if (digits.length > 1) {
       // collage d'un code complet
-      const next = digits.slice(0, 6).split("");
+      const next = digits.slice(0, 8).split("");
       const filled = [...code];
-      for (let i = 0; i < 6; i++) filled[i] = next[i] ?? "";
+      for (let i = 0; i < 8; i++) filled[i] = next[i] ?? "";
       setCode(filled);
-      inputs.current[Math.min(next.length, 5)]?.focus();
+      inputs.current[Math.min(next.length, 7)]?.focus();
       return;
     }
     const next = [...code];
     next[idx] = digits.slice(-1);
     setCode(next);
-    if (digits && idx < 5) inputs.current[idx + 1]?.focus();
+    if (digits && idx < 7) inputs.current[idx + 1]?.focus();
   };
 
   const handleKeyPress = (e: any, idx: number) => {
@@ -43,7 +43,7 @@ export default function VerifyEmailScreen() {
 
   const handleVerify = async () => {
     const fullCode = code.join("");
-    if (fullCode.length < 6) { setError("Entre le code à 6 chiffres reçu par email."); return; }
+    if (fullCode.length < 8) { setError("Entre le code à 8 chiffres reçu par email."); return; }
     if (!email) { setError("Email introuvable. Reprends l'inscription."); return; }
     try {
       setIsLoading(true);
@@ -89,13 +89,13 @@ export default function VerifyEmailScreen() {
             Vérifie ton email
           </Text>
           <Text style={{ fontSize: 14, color: "#888", textAlign: "center", lineHeight: 22 }}>
-            Nous avons envoyé un code à 6 chiffres à{"\n"}
+            Nous avons envoyé un code à 8 chiffres à{"\n"}
             <Text style={{ color: "#D4AF37" }}>{email || "ton adresse email"}</Text>
           </Text>
         </View>
 
-        {/* 6-digit boxes */}
-        <View style={{ flexDirection: "row", justifyContent: "center", gap: 10 }}>
+        {/* 8-digit boxes */}
+        <View style={{ flexDirection: "row", justifyContent: "center", gap: 6 }}>
           {code.map((digit, idx) => (
             <TextInput
               key={idx}
@@ -104,12 +104,12 @@ export default function VerifyEmailScreen() {
               onChangeText={(v) => handleChangeCode(v, idx)}
               onKeyPress={(e) => handleKeyPress(e, idx)}
               keyboardType="number-pad"
-              maxLength={idx === 0 ? 6 : 1}
+              maxLength={idx === 0 ? 8 : 1}
               style={{
-                width: 46, height: 56, borderRadius: 12,
+                width: 36, height: 52, borderRadius: 10,
                 borderWidth: digit ? 2 : 1, borderColor: digit ? "#D4AF37" : "#333",
                 backgroundColor: "#111120", textAlign: "center",
-                fontSize: 22, fontWeight: "700", color: "#D4AF37",
+                fontSize: 20, fontWeight: "700", color: "#D4AF37",
               }}
             />
           ))}
@@ -129,16 +129,16 @@ export default function VerifyEmailScreen() {
         {/* Verify */}
         <TouchableOpacity
           onPress={handleVerify}
-          disabled={isLoading || code.join("").length < 6}
+          disabled={isLoading || code.join("").length < 8}
           style={{
-            backgroundColor: code.join("").length === 6 ? "#D4AF37" : "#333",
+            backgroundColor: code.join("").length === 8 ? "#D4AF37" : "#333",
             borderRadius: 50, paddingVertical: 16, alignItems: "center",
           }}
           activeOpacity={0.8}
         >
           {isLoading
             ? <ActivityIndicator color="#0a0a0f" />
-            : <Text style={{ color: code.join("").length === 6 ? "#0a0a0f" : "#666", fontWeight: "700", fontSize: 16 }}>Vérifier</Text>}
+            : <Text style={{ color: code.join("").length === 8 ? "#0a0a0f" : "#666", fontWeight: "700", fontSize: 16 }}>Vérifier</Text>}
         </TouchableOpacity>
 
         {/* Resend */}
