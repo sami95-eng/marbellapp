@@ -14,6 +14,7 @@ import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
 import { useDemo } from "@/lib/demo-context";
 import {
   useVipData,
@@ -542,8 +543,10 @@ export default function VipScreen() {
 
   const isInstagramUser = isDemoMode || (isAuthenticated && user?.loginMethod === "instagram");
 
-  // Nombre de posts Instagram taguant des établissements partenaires.
-  const partnerPosts = isDemoMode ? 18 : (user as any)?.partnerPostCount ?? 0;
+  // Nombre de posts Instagram taguant des établissements partenaires,
+  // lu depuis profiles.partner_post_count (18 en démo).
+  const { profile } = useProfile(isDemoMode ? undefined : user?.id);
+  const partnerPosts = isDemoMode ? 18 : (profile?.partner_post_count ?? 0);
   const currentTier: TierKey =
     partnerPosts >= 30 ? "platinum" :
     partnerPosts >= 15 ? "gold" :

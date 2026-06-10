@@ -8,6 +8,7 @@ export interface UserProfile {
   bio:          string | null;
   preferences:  string[] | null;
   role:         string;
+  partner_post_count: number;
   created_at:   string;
 }
 
