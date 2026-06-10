@@ -255,6 +255,8 @@ function RootLayoutInner() {
                 <Stack.Screen name="edit-profile" options={{ animation: "slide_from_bottom" }} />
                 <Stack.Screen name="partner-dashboard" />
                 <Stack.Screen name="join-partner" />
+                <Stack.Screen name="privacy" options={{ animation: "slide_from_bottom" }} />
+                <Stack.Screen name="terms" options={{ animation: "slide_from_bottom" }} />
               </Stack>
                 <StatusBar style="light" />
               </NotificationsProvider>

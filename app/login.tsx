@@ -195,6 +195,15 @@ export default function LoginScreen() {
             <Text style={{ fontSize: 11, color: "#444", textAlign: "center", lineHeight: 18 }}>
               {t("login.terms")}
             </Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 18, marginTop: 4 }}>
+              <TouchableOpacity onPress={() => router.push("/privacy")}>
+                <Text style={{ fontSize: 11, color: "#D4AF37" }}>{t("legal.privacy")}</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 11, color: "#333" }}>·</Text>
+              <TouchableOpacity onPress={() => router.push("/terms")}>
+                <Text style={{ fontSize: 11, color: "#D4AF37" }}>{t("legal.terms")}</Text>
+              </TouchableOpacity>
+            </View>
 
           </View>
         </ScrollView>

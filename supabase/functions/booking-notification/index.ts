@@ -322,15 +322,17 @@ function adminStatusHtml(d: Record<string, string>, title: string, accent: strin
 // kind = "confirmed" → "Votre réservation est confirmée ✅"
 // kind = "cancelled" → "Votre réservation n'a pas pu être confirmée" (refus d'une demande)
 // kind = "revoked"   → "Votre réservation a été annulée" (annulation d'une résa déjà confirmée, avec excuses)
-function statusEmailHtml(d: Record<string, string>, kind: "confirmed" | "cancelled" | "revoked") {
+function statusEmailHtml(d: Record<string, string>, kind: "confirmed" | "cancelled" | "revoked" | "client_cancelled") {
   const confirmed = kind === "confirmed";
   const accent = confirmed ? "#4ADE80" : "#EF4444";
-  const emoji  = confirmed ? "✅" : kind === "revoked" ? "🙏" : "⚠️";
+  const emoji  = confirmed ? "✅" : kind === "revoked" ? "🙏" : kind === "client_cancelled" ? "🗓️" : "⚠️";
   const title  = confirmed
     ? "Votre réservation est confirmée ✅"
     : kind === "revoked"
       ? "Votre réservation a été annulée"
-      : "Votre demande n'a pas pu être confirmée";
+      : kind === "client_cancelled"
+        ? "Votre réservation a été annulée"
+        : "Votre demande n'a pas pu être confirmée";
   const message = confirmed
     ? `Bonjour <strong style="color:#D4AF37">${d.userName ?? ""}</strong>,<br/>
        Bonne nouvelle ! Votre réservation chez <strong>${d.venueName}</strong> est
@@ -342,10 +344,15 @@ function statusEmailHtml(d: Record<string, string>, kind: "confirmed" | "cancell
          Nous vous prions de nous excuser sincèrement pour ce contretemps.
          N'hésitez pas à nous contacter pour reprogrammer votre venue — nous ferons
          le maximum pour vous accueillir dans les meilleures conditions.`
-      : `Bonjour <strong style="color:#D4AF37">${d.userName ?? ""}</strong>,<br/>
-         Nous sommes désolés : votre réservation chez <strong>${d.venueName}</strong>
-         n'a pas pu être confirmée. Pour toute question ou pour proposer une autre date,
-         contactez-nous directement.`;
+      : kind === "client_cancelled"
+        ? `Bonjour <strong style="color:#D4AF37">${d.userName ?? ""}</strong>,<br/>
+           Nous confirmons l'annulation de votre réservation chez
+           <strong>${d.venueName}</strong>. Nous espérons vous accueillir très bientôt
+           pour une prochaine expérience.`
+        : `Bonjour <strong style="color:#D4AF37">${d.userName ?? ""}</strong>,<br/>
+           Nous sommes désolés : votre réservation chez <strong>${d.venueName}</strong>
+           n'a pas pu être confirmée. Pour toute question ou pour proposer une autre date,
+           contactez-nous directement.`;
 
   const rows = [
     ["Venue", d.venueName],
@@ -458,7 +465,7 @@ serve(async (req: Request) => {
 
     // ── Décision partenaire : confirmation / refus / annulation → email unique au client ──
     const type = d.type ?? "request";
-    if (type === "confirmed" || type === "cancelled" || type === "revoked" || type === "rescheduled") {
+    if (type === "confirmed" || type === "cancelled" || type === "revoked" || type === "rescheduled" || type === "client_cancelled") {
       if (!d.userEmail || !d.venueName) {
         return new Response(
           JSON.stringify({ error: "Missing fields: userEmail, venueName" }),
@@ -471,7 +478,9 @@ serve(async (req: Request) => {
           ? `Annulation de votre réservation — ${d.venueName}${d.date ? ` · ${d.date}` : ""}`
           : type === "rescheduled"
             ? `📅 Votre réservation a été modifiée — ${d.venueName}${d.date ? ` · ${d.date}` : ""}`
-            : `Votre réservation n'a pas pu être confirmée — ${d.venueName}`;
+            : type === "client_cancelled"
+              ? `Annulation confirmée — ${d.venueName}${d.date ? ` · ${d.date}` : ""}`
+              : `Votre réservation n'a pas pu être confirmée — ${d.venueName}`;
 
       const datePart = d.date ? ` le ${d.date}` : "";
       const timePart = d.time ? ` à ${d.time}` : "";
@@ -484,8 +493,11 @@ serve(async (req: Request) => {
           : type === "rescheduled"
             ? { kind: "reminder" as const, title: "Réservation modifiée 📅",
                 message: `Votre réservation chez ${d.venueName} a été déplacée au ${d.date ?? ""}${timePart}.` }
-            : { kind: "reservation_cancelled" as const, title: "Réservation non confirmée",
-                message: `Votre réservation chez ${d.venueName}${datePart} n'a pas pu être confirmée. Contactez-nous pour proposer une autre date.` };
+            : type === "client_cancelled"
+              ? { kind: "reservation_cancelled" as const, title: "Réservation annulée",
+                  message: `Votre réservation chez ${d.venueName}${datePart} a bien été annulée. À bientôt sur Marbell'app.` }
+              : { kind: "reservation_cancelled" as const, title: "Réservation non confirmée",
+                  message: `Votre réservation chez ${d.venueName}${datePart} n'a pas pu être confirmée. Contactez-nous pour proposer une autre date.` };
 
       const html = type === "rescheduled"
         ? rescheduleEmailHtml(d)
@@ -498,7 +510,9 @@ serve(async (req: Request) => {
           ? { title: "Réservation annulée",   accent: "#EF4444", emoji: "🚫" }
           : type === "rescheduled"
             ? { title: "Réservation modifiée", accent: "#D4AF37", emoji: "📅" }
-            : { title: "Réservation refusée",  accent: "#EF4444", emoji: "⚠️" };
+            : type === "client_cancelled"
+              ? { title: "Réservation annulée par le client", accent: "#EF4444", emoji: "🙅" }
+              : { title: "Réservation refusée",  accent: "#EF4444", emoji: "⚠️" };
       const adminSubject = `${adminMeta.emoji} ${adminMeta.title} — ${d.venueName}${d.date ? ` · ${d.date}` : ""}`;
 
       // Email au client + email admin + notification en base, en parallèle

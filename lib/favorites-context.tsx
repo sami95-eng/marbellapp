@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/hooks/use-auth";
+import { getFavorites, addFavorite, removeFavorite } from "@/lib/favorites-service";
 
 const FAVORITES_KEY = "@marbella_favorites";
 
@@ -18,30 +20,27 @@ const FavoritesContext = createContext<FavoritesContextType>({
 });
 
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState<string[]>([]);
 
+  // Charge les favoris : depuis Supabase si connecté, sinon AsyncStorage (local).
   useEffect(() => {
-    loadFavorites();
-  }, []);
-
-  const loadFavorites = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(FAVORITES_KEY);
-      if (stored) {
-        setFavorites(JSON.parse(stored));
+    let cancelled = false;
+    (async () => {
+      try {
+        if (user?.id) {
+          const remote = await getFavorites(user.id);
+          if (!cancelled) setFavorites(remote);
+        } else {
+          const stored = await AsyncStorage.getItem(FAVORITES_KEY);
+          if (!cancelled) setFavorites(stored ? JSON.parse(stored) : []);
+        }
+      } catch (e) {
+        console.warn("[favorites] load failed:", (e as Error)?.message);
       }
-    } catch (error) {
-      console.error("Error loading favorites:", error);
-    }
-  };
-
-  const saveFavorites = async (newFavorites: string[]) => {
-    try {
-      await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(newFavorites));
-    } catch (error) {
-      console.error("Error saving favorites:", error);
-    }
-  };
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const isFavorite = useCallback(
     (venueId: string) => favorites.includes(venueId),
@@ -51,14 +50,20 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   const toggleFavorite = useCallback(
     (venueId: string) => {
       setFavorites((prev) => {
-        const newFavorites = prev.includes(venueId)
-          ? prev.filter((id) => id !== venueId)
-          : [...prev, venueId];
-        saveFavorites(newFavorites);
-        return newFavorites;
+        const isFav = prev.includes(venueId);
+        const next = isFav ? prev.filter((id) => id !== venueId) : [...prev, venueId];
+
+        // Persistance (optimiste) : Supabase si connecté, sinon AsyncStorage.
+        if (user?.id) {
+          const op = isFav ? removeFavorite(user.id, venueId) : addFavorite(user.id, venueId);
+          op.catch((e) => console.warn("[favorites] sync failed:", e?.message));
+        } else {
+          AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(next)).catch(() => {});
+        }
+        return next;
       });
     },
-    []
+    [user?.id]
   );
 
   return (

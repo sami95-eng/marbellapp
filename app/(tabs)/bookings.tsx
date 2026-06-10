@@ -9,6 +9,7 @@ import { useColors } from "@/hooks/use-colors";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/use-auth";
 import { useBookings } from "@/hooks/use-bookings";
+import { supabase } from "@/lib/supabase";
 import { useDemo } from "@/lib/demo-context";
 import { DEMO_BOOKINGS } from "@/constants/demo-data";
 import type { Booking } from "@/lib/bookings-service";
@@ -59,16 +60,17 @@ function BookingCard({
   item,
   onCancel,
   onRebook,
+  cancelling,
 }: {
   item: Booking;
-  onCancel: (id: string) => void;
+  onCancel: (b: Booking) => void;
   onRebook: (b: Booking) => void;
+  cancelling: boolean;
 }) {
   const colors = useColors();
   const router = useRouter();
   const { t }  = useTranslation();
 
-  const tab        = getDisplayTab(item);
   const statusKey  = item.status as keyof typeof STATUS_COLORS;
   const statusCfg  = STATUS_COLORS[statusKey] ?? STATUS_COLORS.confirmed;
   const emoji      = CATEGORY_EMOJI[item.venue_category ?? ""] ?? "✨";
@@ -161,24 +163,28 @@ function BookingCard({
           )}
 
           {/* Actions */}
-          {tab === "upcoming" && (
+          {/* Annuler : disponible sur les réservations en attente OU confirmées */}
+          {(item.status === "pending" || item.status === "confirmed") && (
             <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => onCancel(item.id)}
+                disabled={cancelling}
+                onPress={() => onCancel(item)}
                 style={{
                   flex: 1, backgroundColor: "rgba(239,68,68,0.15)",
                   paddingVertical: 8, borderRadius: 8, alignItems: "center",
+                  opacity: cancelling ? 0.5 : 1,
                 }}
               >
-                <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 12 }}>
-                  {t("bookings.cancel")}
-                </Text>
+                {cancelling
+                  ? <ActivityIndicator color="#EF4444" size="small" />
+                  : <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 12 }}>{t("bookings.cancel")}</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {tab === "past" && item.status === "completed" && (
+          {/* Rebook : réservations terminées ou annulées */}
+          {(item.status === "completed" || item.status === "cancelled") && (
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => onRebook(item)}
@@ -188,21 +194,6 @@ function BookingCard({
               }}
             >
               <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>
-                {t("bookings.bookAgain")}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {tab === "cancelled" && (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => onRebook(item)}
-              style={{
-                marginTop: 10, backgroundColor: colors.primary,
-                paddingVertical: 8, borderRadius: 8, alignItems: "center",
-              }}
-            >
-              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>
                 {t("bookings.bookAgain")}
               </Text>
             </TouchableOpacity>
@@ -239,6 +230,7 @@ export default function BookingsScreen() {
     : realBookings;
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const upcoming  = bookings.filter((b) => getDisplayTab(b) === "upcoming");
   const past      = bookings.filter((b) => getDisplayTab(b) === "past");
@@ -248,28 +240,49 @@ export default function BookingsScreen() {
                  : activeTab === "past"     ? past
                  : cancelled;
 
-  const handleCancel = (id: string) => {
+  const handleCancel = (b: Booking) => {
     const doCancel = async () => {
+      setCancellingId(b.id);
       try {
-        await cancel(id);
-      } catch (e: any) {
-        if (Platform.OS === "web") {
-          window.alert(`Failed to cancel: ${e?.message}`);
-        } else {
-          Alert.alert("Error", e?.message ?? "Failed to cancel booking.");
+        await cancel(b.id);
+        // Email d'annulation au client + admin (non bloquant) — expéditeur Marbell'app
+        const userEmail = b.user_email ?? user?.email ?? undefined;
+        if (userEmail) {
+          supabase.functions.invoke("booking-notification", {
+            body: {
+              type:               "client_cancelled",
+              userId:             b.user_id ?? user?.id ?? undefined,
+              userEmail,
+              userName:           b.user_name ?? user?.name ?? undefined,
+              userPhone:          b.phone_number ?? undefined,
+              venueName:          b.venue_name ?? "",
+              date:               b.date,
+              time:               b.time,
+              guests:             String(b.guests),
+              tableName:          b.table_name ?? undefined,
+              tablePrice:         b.table_price != null ? String(b.table_price) : undefined,
+              confirmationNumber: b.confirmation_number ?? undefined,
+            },
+          }).catch((e) => console.warn("[bookings] cancel email failed:", e?.message));
         }
+      } catch (e: any) {
+        if (Platform.OS === "web") window.alert(`Échec de l'annulation : ${e?.message}`);
+        else Alert.alert("Erreur", e?.message ?? "Échec de l'annulation.");
+      } finally {
+        setCancellingId(null);
       }
     };
 
+    const confirmMsg = t("bookings.cancelConfirm");
     if (Platform.OS === "web") {
-      if (window.confirm("Cancel this booking?")) doCancel();
+      if (window.confirm(confirmMsg)) doCancel();
     } else {
       Alert.alert(
         t("bookings.cancel"),
-        "Are you sure you want to cancel this booking?",
+        confirmMsg,
         [
           { text: t("common.cancel"), style: "cancel" },
-          { text: "Yes, cancel", style: "destructive", onPress: doCancel },
+          { text: t("bookings.cancelYes"), style: "destructive", onPress: doCancel },
         ]
       );
     }
@@ -368,9 +381,10 @@ export default function BookingsScreen() {
           <FlatList
             data={filtered}
             renderItem={({ item }) => (
-              <BookingCard item={item} onCancel={handleCancel} onRebook={handleRebook} />
+              <BookingCard item={item} onCancel={handleCancel} onRebook={handleRebook} cancelling={cancellingId === item.id} />
             )}
             keyExtractor={(item) => item.id}
+            extraData={cancellingId}
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
           />

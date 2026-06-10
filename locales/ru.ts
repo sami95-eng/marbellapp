@@ -146,6 +146,8 @@ const ru = {
   "bookings.exploreVenues": "Исследовать места",
   "bookings.modify": "Изменить",
   "bookings.cancel": "Отменить",
+  "bookings.cancelConfirm": "Вы уверены, что хотите отменить это бронирование?",
+  "bookings.cancelYes": "Да, отменить",
   "bookings.leaveReview": "Оставить отзыв",
   "bookings.bookAgain": "Забронировать снова",
 
@@ -233,6 +235,9 @@ const ru = {
   "settings.language": "Язык",
   "settings.signOut": "Выйти",
   "settings.version": "Marbell'app v1.0.0",
+  "settings.legal": "Правовая информация",
+  "legal.privacy": "Политика конфиденциальности",
+  "legal.terms": "Условия использования",
 
   // ── Partner Dashboard ─────────────────────────────────────────────
   "partner.title": "Панель партнёра",

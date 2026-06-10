@@ -30,12 +30,18 @@ export default function LoginEmailScreen() {
 
     try {
       if (mode === "signup") {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { name, login_method: "email" } },
         });
         if (signUpError) throw signUpError;
+        // Si la confirmation email est activée, aucune session n'est créée :
+        // on dirige vers l'écran de vérification (code OTP envoyé par Supabase).
+        if (!data.session) {
+          router.replace({ pathname: "/verify-email", params: { email } });
+          return;
+        }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,

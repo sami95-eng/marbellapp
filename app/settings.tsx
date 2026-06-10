@@ -265,6 +265,33 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* Legal */}
+        <View className="mb-6">
+          <Text className="text-lg font-bold text-foreground mb-3">{t("settings.legal")}</Text>
+          <TouchableOpacity
+            className="bg-surface rounded-2xl p-4 mb-3 border border-border flex-row items-center justify-between"
+            activeOpacity={0.7}
+            onPress={() => router.push("/privacy")}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Text style={{ fontSize: 18 }}>🔒</Text>
+              <Text className="font-semibold text-foreground">{t("legal.privacy")}</Text>
+            </View>
+            <Text className="text-muted">→</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="bg-surface rounded-2xl p-4 border border-border flex-row items-center justify-between"
+            activeOpacity={0.7}
+            onPress={() => router.push("/terms")}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Text style={{ fontSize: 18 }}>📄</Text>
+              <Text className="font-semibold text-foreground">{t("legal.terms")}</Text>
+            </View>
+            <Text className="text-muted">→</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Version */}
         <View className="bg-surface rounded-2xl p-4 border border-border mb-8 items-center">
           <Text className="text-xs text-muted">{t("settings.version")}</Text>

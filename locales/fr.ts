@@ -146,6 +146,8 @@ const fr = {
   "bookings.exploreVenues": "Explorer les lieux",
   "bookings.modify": "Modifier",
   "bookings.cancel": "Annuler",
+  "bookings.cancelConfirm": "Êtes-vous sûr de vouloir annuler cette réservation ?",
+  "bookings.cancelYes": "Oui, annuler",
   "bookings.leaveReview": "Laisser un avis",
   "bookings.bookAgain": "Réserver à nouveau",
 
@@ -233,6 +235,9 @@ const fr = {
   "settings.language": "Langue",
   "settings.signOut": "Se déconnecter",
   "settings.version": "Marbell'app v1.0.0",
+  "settings.legal": "Légal",
+  "legal.privacy": "Politique de confidentialité",
+  "legal.terms": "Conditions d'utilisation",
 
   // ── Partner Dashboard ─────────────────────────────────────────────
   "partner.title": "Dashboard Partenaire",
