@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marbell'app — Rejoignez l'élite des établissements de Marbella</title>
+  <meta name="description" content="Marbell'app connecte les établissements de luxe de Marbella à une clientèle exclusive. Réservations VIP, visibilité premium, gestion simplifiée. Rejoignez le réseau partenaire." />
+  <meta property="og:title" content="Marbell'app — Réseau partenaire des établissements de Marbella" />
+  <meta property="og:description" content="Réservations VIP, visibilité premium et gestion simplifiée pour les établissements de luxe de Marbella." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://d2xsxph8kpxj0f.cloudfront.net/310519663691506281/5FAyrkSuqfZhzmeobHt2YK/marbellapp-logo-9R3o9kXwf8EVF2KZc8dz6p.png" />
+  <link rel="icon" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663691506281/5FAyrkSuqfZhzmeobHt2YK/marbellapp-logo-9R3o9kXwf8EVF2KZc8dz6p.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0A0E13;
+      --bg-2: #0F141B;
+      --surface: #12171F;
+      --gold: #D4AF37;
+      --gold-soft: #E8C969;
+      --text: #EAEAEA;
+      --muted: #8A93A0;
+      --border: rgba(212, 175, 55, 0.18);
+      --radius: 18px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
+    a { color: inherit; text-decoration: none; }
+    .container { width: 100%; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    .gold { color: var(--gold); }
+
+    /* Background glow */
+    .glow {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(700px 500px at 80% -10%, rgba(212,175,55,0.10), transparent 60%),
+        radial-gradient(600px 500px at 0% 30%, rgba(212,175,55,0.06), transparent 55%);
+    }
+
+    /* Nav */
+    header {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(12px);
+      background: rgba(10, 14, 19, 0.72);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    nav { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: .3px; }
+    .brand img { height: 34px; width: auto; }
+    .brand span { font-size: 19px; }
+    .brand span b { color: var(--gold); font-weight: 800; }
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a.muted { color: var(--muted); font-size: 14px; transition: color .2s; }
+    .nav-links a.muted:hover { color: var(--text); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-weight: 600; font-size: 15px; letter-spacing: .2px;
+      padding: 13px 26px; border-radius: 50px; cursor: pointer;
+      transition: transform .2s ease, box-shadow .2s ease, background .2s;
+      border: 1px solid transparent; white-space: nowrap;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+      color: #0A0E13;
+      box-shadow: 0 8px 28px rgba(212,175,55,0.28);
+    }
+    .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(212,175,55,0.4); }
+    .btn-ghost { border-color: var(--border); color: var(--text); background: transparent; }
+    .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+    .btn-sm { padding: 10px 20px; font-size: 14px; }
+
+    /* Hero */
+    .hero { padding: 96px 0 80px; text-align: center; position: relative; }
+    .eyebrow {
+      display: inline-block; font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--gold); border: 1px solid var(--border); border-radius: 50px;
+      padding: 7px 18px; margin-bottom: 28px; background: rgba(212,175,55,0.05);
+    }
+    .hero h1 { font-size: clamp(40px, 7vw, 76px); font-weight: 700; line-height: 1.04; letter-spacing: .5px; }
+    .hero h1 em { font-style: italic; color: var(--gold); }
+    .hero p.lead {
+      max-width: 640px; margin: 24px auto 38px; color: var(--muted);
+      font-size: clamp(16px, 2.2vw, 19px); font-weight: 300;
+    }
+    .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .hero-note { margin-top: 22px; font-size: 13px; color: var(--muted); }
+
+    /* Stats */
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+      margin: 72px 0; padding: 36px; border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    }
+    .stat { text-align: center; }
+    .stat .num { font-family: 'Cormorant Garamond', serif; font-size: 44px; font-weight: 700; color: var(--gold); line-height: 1; }
+    .stat .lbl { font-size: 13px; color: var(--muted); margin-top: 8px; letter-spacing: .3px; }
+
+    /* Section heading */
+    .section { padding: 72px 0; }
+    .section-head { text-align: center; max-width: 660px; margin: 0 auto 52px; }
+    .section-head .tag { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); }
+    .section-head h2 { font-size: clamp(30px, 5vw, 46px); font-weight: 700; margin-top: 12px; line-height: 1.12; }
+    .section-head p { color: var(--muted); margin-top: 16px; font-weight: 300; font-size: 17px; }
+
+    /* Benefits grid */
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .card {
+      background: var(--surface); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: var(--radius); padding: 30px;
+      transition: transform .25s ease, border-color .25s ease;
+    }
+    .card:hover { transform: translateY(-4px); border-color: var(--border); }
+    .card .ico {
+      width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
+      font-size: 24px; margin-bottom: 18px;
+      background: rgba(212,175,55,0.1); border: 1px solid var(--border);
+    }
+    .card h3 { font-size: 23px; font-weight: 600; margin-bottom: 8px; }
+    .card p { color: var(--muted); font-size: 15px; font-weight: 300; }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; counter-reset: step; }
+    .step { position: relative; padding-top: 16px; }
+    .step .n {
+      font-family: 'Cormorant Garamond', serif; font-size: 56px; font-weight: 700;
+      color: rgba(212,175,55,0.25); line-height: 1;
+    }
+    .step h3 { font-size: 22px; font-weight: 600; margin: 6px 0 8px; }
+    .step p { color: var(--muted); font-size: 15px; font-weight: 300; }
+
+    /* CTA band */
+    .cta-band {
+      margin: 40px 0 0; padding: 70px 40px; text-align: center;
+      border-radius: 26px; border: 1px solid var(--border);
+      background:
+        radial-gradient(600px 300px at 50% 0%, rgba(212,175,55,0.12), transparent 70%),
+        linear-gradient(180deg, var(--bg-2), var(--surface));
+    }
+    .cta-band h2 { font-size: clamp(30px, 5vw, 48px); font-weight: 700; line-height: 1.1; }
+    .cta-band p { color: var(--muted); margin: 16px auto 32px; max-width: 520px; font-weight: 300; font-size: 17px; }
+
+    /* Footer */
+    footer { border-top: 1px solid rgba(255,255,255,0.05); padding: 44px 0; margin-top: 80px; }
+    .foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; }
+    .foot .brand span { font-size: 17px; }
+    .foot .links { display: flex; gap: 24px; color: var(--muted); font-size: 14px; }
+    .foot .links a:hover { color: var(--gold); }
+    .copy { width: 100%; text-align: center; color: #555; font-size: 12px; margin-top: 28px; }
+
+    @media (max-width: 860px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .grid, .steps { grid-template-columns: 1fr; }
+      .nav-links a.muted { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+
+  <!-- NAV -->
+  <header>
+    <div class="container">
+      <nav>
+        <a class="brand" href="#top">
+          <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663691506281/5FAyrkSuqfZhzmeobHt2YK/marbellapp-logo-9R3o9kXwf8EVF2KZc8dz6p.png" alt="Marbell'app" />
+          <span>Marbell<b>'app</b></span>
+        </a>
+        <div class="nav-links">
+          <a class="muted" href="#avantages">Avantages</a>
+          <a class="muted" href="#fonctionnement">Fonctionnement</a>
+          <a class="muted" href="https://marbella-secret-society.vercel.app/login">Espace établissement</a>
+          <a class="btn btn-gold btn-sm" href="https://marbella-secret-society.vercel.app/join-partner">Rejoindre</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero" id="top">
+    <div class="container">
+      <span class="eyebrow">Réseau partenaire · Marbella</span>
+      <h1>L'élite de Marbella,<br/><em>réunie sur une seule app.</em></h1>
+      <p class="lead">
+        Marbell'app connecte les établissements de luxe de Marbella à une clientèle exclusive
+        en quête d'expériences d'exception. Beach clubs, fine dining, nightlife, spas&nbsp;: donnez
+        à votre établissement la visibilité qu'il mérite.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-gold" href="https://marbella-secret-society.vercel.app/join-partner">✨ Rejoindre Marbell'app</a>
+        <a class="btn btn-ghost" href="#avantages">Découvrir les avantages</a>
+      </div>
+      <p class="hero-note">Sans engagement · Mise en ligne sous 48&nbsp;h</p>
+
+      <!-- STATS -->
+      <div class="stats">
+        <div class="stat"><div class="num">50+</div><div class="lbl">Établissements partenaires</div></div>
+        <div class="stat"><div class="num">VIP</div><div class="lbl">Clientèle premium ciblée</div></div>
+        <div class="stat"><div class="num">2 h</div><div class="lbl">Confirmation des réservations</div></div>
+        <div class="stat"><div class="num">4</div><div class="lbl">Langues (FR · EN · ES · RU)</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AVANTAGES -->
+  <section class="section" id="avantages">
+    <div class="container">
+      <div class="section-head">
+        <div class="tag">Pourquoi nous rejoindre</div>
+        <h2>Tout pour remplir vos tables, sans effort.</h2>
+        <p>Une plateforme pensée pour les établissements haut de gamme&nbsp;: plus de visibilité,
+           moins d'administratif.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">👑</div>
+          <h3>Clientèle exclusive</h3>
+          <p>Accédez à une audience qualifiée et fortunée, à la recherche d'expériences premium à Marbella.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📲</div>
+          <h3>Réservations en direct</h3>
+          <p>Recevez les demandes en temps réel, confirmez ou modifiez en un clic depuis votre dashboard.</p>
+        </div>
+        <div class="card">
+          <div class="ico">✨</div>
+          <h3>Visibilité premium</h3>
+          <p>Photos en vedette, mise en avant « Trending » et offres VIP exposées aux membres les plus actifs.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📊</div>
+          <h3>Dashboard partenaire</h3>
+          <p>Gérez vos tables, vos offres VIP et suivez vos statistiques de réservation en un seul endroit.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📧</div>
+          <h3>Notifications automatiques</h3>
+          <p>Chaque réservation, confirmation ou annulation déclenche un email élégant signé Marbell'app.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌍</div>
+          <h3>Audience internationale</h3>
+          <p>Application multilingue (français, anglais, espagnol, russe) pour toucher la clientèle globale de Marbella.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FONCTIONNEMENT -->
+  <section class="section" id="fonctionnement">
+    <div class="container">
+      <div class="section-head">
+        <div class="tag">Comment ça marche</div>
+        <h2>Opérationnel en 3 étapes.</h2>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="n">01</div>
+          <h3>Rejoignez le réseau</h3>
+          <p>Créez votre espace établissement et présentez votre lieu, vos tables et vos offres.</p>
+        </div>
+        <div class="step">
+          <div class="n">02</div>
+          <h3>Recevez des réservations</h3>
+          <p>Les membres réservent directement&nbsp;; vous confirmez en quelques secondes depuis votre dashboard.</p>
+        </div>
+        <div class="step">
+          <div class="n">03</div>
+          <h3>Accueillez vos clients VIP</h3>
+          <p>Offrez une expérience d'exception et fidélisez une clientèle prête à revenir.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-band">
+        <h2>Prêt à rejoindre l'élite&nbsp;?</h2>
+        <p>Mettez votre établissement entre les mains de la clientèle la plus exigeante de Marbella.</p>
+        <a class="btn btn-gold" href="https://marbella-secret-society.vercel.app/join-partner">✨ Rejoindre Marbell'app</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="foot">
+        <a class="brand" href="#top">
+          <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663691506281/5FAyrkSuqfZhzmeobHt2YK/marbellapp-logo-9R3o9kXwf8EVF2KZc8dz6p.png" alt="Marbell'app" style="height:30px" />
+          <span>Marbell<b class="gold">'app</b></span>
+        </a>
+        <div class="links">
+          <a href="#avantages">Avantages</a>
+          <a href="#fonctionnement">Fonctionnement</a>
+          <a href="https://marbella-secret-society.vercel.app/login">Espace établissement</a>
+          <a href="https://marbella-secret-society.vercel.app/join-partner">Rejoindre</a>
+        </div>
+      </div>
+      <div class="copy">© 2026 Marbell'app · Marbella, Espagne · L'élite des expériences</div>
+    </div>
+  </footer>
+</body>
+</html>
