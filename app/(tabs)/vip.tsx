@@ -398,35 +398,102 @@ function MemberOfferCard({ item, colors }: { item: VipMemberPerk; colors: Return
   );
 }
 
+// --- Section explicative "Comment ça marche" (basée sur les posts Instagram) ---
+const VIP_STEPS = [
+  { n: "1", icon: "📸", title: "Connecte ton Instagram",
+    desc: "Lie ton compte Instagram à Marbell'app en un clic." },
+  { n: "2", icon: "👑", title: "Profite de l'expérience",
+    desc: "Accède aux offres exclusives de nos partenaires : tables VIP, réductions et invitations privées." },
+  { n: "3", icon: "🔓", title: "Partage ta soirée",
+    desc: "Poste sur Instagram en taguant l'établissement et débloque encore plus d'avantages." },
+];
+
+function HowItWorksVIP({ colors }: { colors: ReturnType<typeof useColors> }) {
+  return (
+    <View style={{ marginBottom: 20 }}>
+      <View style={{ alignItems: "center", marginBottom: 14 }}>
+        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Comment ça marche</Text>
+        <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center", marginTop: 4, lineHeight: 18 }}>
+          Plus tu postes et tagues les établissements partenaires, plus tu débloques d'avantages.
+        </Text>
+      </View>
+
+      {VIP_STEPS.map((s) => (
+        <View key={s.n} style={{
+          flexDirection: "row", gap: 14, alignItems: "center",
+          backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 10,
+          borderWidth: 1, borderColor: "rgba(212,175,55,0.18)",
+        }}>
+          <View style={{
+            width: 46, height: 46, borderRadius: 13,
+            backgroundColor: "rgba(212,175,55,0.12)", borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
+            alignItems: "center", justifyContent: "center",
+          }}>
+            <Text style={{ fontSize: 22 }}>{s.icon}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{
+                fontSize: 11, fontWeight: "800", color: "#0A0E13", backgroundColor: "#D4AF37",
+                width: 18, height: 18, borderRadius: 9, textAlign: "center", overflow: "hidden", lineHeight: 18,
+              }}>{s.n}</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{s.title}</Text>
+            </View>
+            <Text style={{ fontSize: 12.5, color: colors.muted, marginTop: 4, lineHeight: 18 }}>{s.desc}</Text>
+          </View>
+        </View>
+      ))}
+
+      <View style={{
+        backgroundColor: "rgba(212,175,55,0.06)", borderRadius: 12, padding: 12,
+        borderWidth: 1, borderColor: "rgba(212,175,55,0.18)",
+      }}>
+        <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center", lineHeight: 18 }}>
+          ✨ Le statut VIP récompense tes{" "}
+          <Text style={{ color: colors.primary, fontWeight: "700" }}>posts Instagram</Text> chez les partenaires —{" "}
+          <Text style={{ color: colors.primary, fontWeight: "700" }}>pas</Text> ton nombre de followers.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function InstagramGate({ isAuthenticated, router, colors }: {
   isAuthenticated: boolean; router: ReturnType<typeof useRouter>; colors: ReturnType<typeof useColors>;
 }) {
   return (
     <ScreenContainer>
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32, gap: 20 }}>
-        <Text style={{ fontSize: 56 }}>📸</Text>
-        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary, textAlign: "center" }}>
-          Accès VIP
-        </Text>
-        <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 22 }}>
-          {isAuthenticated
-            ? "Connecte ton compte Instagram pour débloquer les offres VIP et accéder aux tiers d'avantages."
-            : "Connecte-toi avec Instagram pour accéder aux offres VIP exclusives de Marbella."}
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.push("/login")}
-          style={{
-            backgroundColor: "#833AB4", borderRadius: 50, paddingVertical: 14,
-            paddingHorizontal: 32, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8,
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={{ fontSize: 18 }}>📸</Text>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
-            {isAuthenticated ? "Connecter Instagram" : "Se connecter avec Instagram"}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 60 }}
+      >
+        <View style={{ alignItems: "center", gap: 14, marginBottom: 28 }}>
+          <Text style={{ fontSize: 56 }}>👑</Text>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary, textAlign: "center" }}>
+            Accès VIP
           </Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 22 }}>
+            {isAuthenticated
+              ? "Connecte ton compte Instagram pour débloquer les offres VIP de nos établissements partenaires."
+              : "Connecte-toi avec Instagram pour accéder aux offres VIP exclusives de Marbella."}
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.push("/login")}
+            style={{
+              backgroundColor: "#833AB4", borderRadius: 50, paddingVertical: 14,
+              paddingHorizontal: 32, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4,
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 18 }}>📸</Text>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+              {isAuthenticated ? "Connecter Instagram" : "Se connecter avec Instagram"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <HowItWorksVIP colors={colors} />
+      </ScrollView>
     </ScreenContainer>
   );
 }
@@ -543,13 +610,16 @@ export default function VipScreen() {
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
-              <View style={{ marginBottom: 14 }}>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>
-                  Offres de la Semaine
-                </Text>
-                <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
-                  Tables · Daybeds · Bouteilles · Accès Privatifs
-                </Text>
+              <View>
+                <HowItWorksVIP colors={colors} />
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>
+                    Offres de la Semaine
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
+                    Tables · Daybeds · Bouteilles · Accès Privatifs
+                  </Text>
+                </View>
               </View>
             }
             ListEmptyComponent={
