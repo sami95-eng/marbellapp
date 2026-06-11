@@ -120,6 +120,16 @@ export async function getVenuesByCategory(
   return data ?? [];
 }
 
+/** Liste simplifiée de toutes les venues (sélecteur admin des disponibilités) */
+export async function getAllVenuesBasic(): Promise<{ id: string; name: string; category: string }[]> {
+  const { data, error } = await supabase
+    .from("venues")
+    .select("id, name, category")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 /** Venue par slug */
 export async function getVenueBySlug(slug: string): Promise<Venue | null> {
   if (!slug) return null;

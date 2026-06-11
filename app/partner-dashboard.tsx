@@ -15,14 +15,12 @@ import type { VenueTable } from "@/lib/tables-service";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { getManagedBookings, updateBookingStatus, updateBookingSchedule } from "@/lib/bookings-service";
-import { getVenueBySlug } from "@/lib/venues-service";
+import { getAllVenuesBasic } from "@/lib/venues-service";
 import {
-  getVenueSlots, createSlot, toggleSlot, deleteSlot, releaseSlot, type AvailabilitySlot,
+  getVenueSlots, createSlot, toggleSlot, releaseSlot, type AvailabilitySlot,
 } from "@/lib/availability-service";
 
 type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "stats";
-
-const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overview Tab
@@ -520,148 +518,239 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Availability Tab — créneaux jour/heure + capacité
+// Availability Tab — calendrier hebdo (jour × heure) + sélecteur de venue
 // ─────────────────────────────────────────────────────────────────────────────
+const TIME_SLOTS = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00", "00:00"];
+const DAYS_ORDER = [1, 2, 3, 4, 5, 6, 0];                       // Lun → Dim (day_of_week)
+const DAY_SHORT: Record<number, string> = { 0: "Dim", 1: "Lun", 2: "Mar", 3: "Mer", 4: "Jeu", 5: "Ven", 6: "Sam" };
+const cellKey = (day: number, time: string) => `${day}-${time}`;
+
+type Cell = { slotId?: string; active: boolean; max_capacity: number; current_bookings: number };
+
+const DEMO_VENUE = { id: "demo", name: DEMO_PARTNER.name, category: "Beach Club" };
 const DEMO_SLOTS: AvailabilitySlot[] = [
   { id: "ds1", venue_id: "demo", day_of_week: 5, time: "20:00", max_capacity: 12, current_bookings: 8, is_active: true, created_at: "" },
-  { id: "ds2", venue_id: "demo", day_of_week: 5, time: "22:30", max_capacity: 12, current_bookings: 12, is_active: true, created_at: "" },
-  { id: "ds3", venue_id: "demo", day_of_week: 6, time: "21:00", max_capacity: 16, current_bookings: 4, is_active: true, created_at: "" },
+  { id: "ds2", venue_id: "demo", day_of_week: 5, time: "22:00", max_capacity: 12, current_bookings: 12, is_active: true, created_at: "" },
+  { id: "ds3", venue_id: "demo", day_of_week: 6, time: "22:00", max_capacity: 16, current_bookings: 4, is_active: true, created_at: "" },
 ];
 
 function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
   const { t } = useTranslation();
+  const [venues, setVenues]   = useState<{ id: string; name: string; category: string }[]>([]);
   const [venueId, setVenueId] = useState<string | null>(null);
-  const [slots, setSlots]     = useState<AvailabilitySlot[]>([]);
-  const [loading, setLoading] = useState(!isDemo);
-  const [error, setError]     = useState<string | null>(null);
+  const [cells, setCells]     = useState<Record<string, Cell>>({});
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
-  const [form, setForm] = useState({ day_of_week: 5, time: "21:00", max_capacity: 10 });
+  const [dirty, setDirty]     = useState(false);
+  const [defaultCapacity, setDefaultCapacity] = useState(10);
 
   const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
 
-  const load = useCallback(async () => {
-    if (isDemo) { setSlots(DEMO_SLOTS); setLoading(false); return; }
-    setLoading(true); setError(null);
-    try {
-      const venue = await getVenueBySlug(DEMO_PARTNER.slug);
-      setVenueId(venue?.id ?? null);
-      if (venue?.id) setSlots(await getVenueSlots(venue.id));
-      else setError(t("partner.noVenueBinding") || "Aucune venue liée à ce compte.");
-    } catch (e: any) { setError(e.message ?? "Erreur de chargement"); }
-    finally { setLoading(false); }
+  // Charge la liste des établissements (admin = tous)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (isDemo) { setVenues([DEMO_VENUE]); setVenueId(DEMO_VENUE.id); return; }
+        const vs = await getAllVenuesBasic();
+        if (cancelled) return;
+        setVenues(vs);
+        setVenueId((prev) => prev ?? vs[0]?.id ?? null);
+      } catch (e: any) { notify(e.message ?? "Erreur de chargement des établissements"); }
+    })();
+    return () => { cancelled = true; };
   }, [isDemo]);
 
-  useEffect(() => { load(); }, [load]);
-
-  const addSlot = async () => {
-    if (!/^\d{1,2}:\d{2}$/.test(form.time)) { notify(t("partner.slotTimeFormat") || "Heure au format HH:MM."); return; }
-    if (isDemo) {
-      setSlots((p) => [...p, { id: `d-${Date.now()}`, venue_id: "demo", ...form, current_bookings: 0, is_active: true, created_at: "" }]);
-      return;
+  // Construit la grille de cellules à partir des créneaux d'une venue
+  const buildCells = useCallback((slots: AvailabilitySlot[]) => {
+    const map: Record<string, Cell> = {};
+    for (const s of slots) {
+      map[cellKey(s.day_of_week, s.time)] = {
+        slotId: s.id, active: s.is_active, max_capacity: s.max_capacity, current_bookings: s.current_bookings,
+      };
     }
-    if (!venueId) { notify(t("partner.noVenueBinding") || "Aucune venue liée."); return; }
+    setCells(map);
+    setDirty(false);
+  }, []);
+
+  // (Re)charge les créneaux quand la venue change
+  useEffect(() => {
+    if (!venueId) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const slots = isDemo
+          ? DEMO_SLOTS
+          : await getVenueSlots(venueId);
+        if (!cancelled) buildCells(slots);
+      } catch (e: any) { if (!cancelled) notify(e.message ?? "Erreur de chargement"); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [venueId, isDemo, buildCells]);
+
+  // Toggle d'une cellule (local) — vert/gris
+  const toggleCell = (day: number, time: string) => {
+    const key = cellKey(day, time);
+    setCells((prev) => {
+      const cur = prev[key];
+      const next = { ...prev };
+      if (!cur) {
+        // pas de créneau → on l'active (création à la sauvegarde)
+        next[key] = { active: true, max_capacity: defaultCapacity, current_bookings: 0 };
+      } else {
+        next[key] = { ...cur, active: !cur.active };
+      }
+      return next;
+    });
+    setDirty(true);
+  };
+
+  // Sauvegarde : crée les nouveaux créneaux, met à jour les is_active modifiés
+  const save = async () => {
+    if (isDemo) { setDirty(false); notify("Mode démo — changements non persistés."); return; }
+    if (!venueId) return;
     setSaving(true);
     try {
-      const s = await createSlot({ venue_id: venueId, ...form });
-      setSlots((p) => [...p, s]);
-    } catch (e: any) { notify(e.message ?? "Échec de l'ajout"); }
+      const tasks: Promise<unknown>[] = [];
+      for (const [key, cell] of Object.entries(cells)) {
+        const [dayStr, time] = key.split(/-(.+)/); // split au 1er tiret (time contient ":")
+        const day = parseInt(dayStr);
+        if (!cell.slotId) {
+          // nouveau créneau (uniquement si activé)
+          if (cell.active) tasks.push(createSlot({ venue_id: venueId, day_of_week: day, time, max_capacity: cell.max_capacity }));
+        } else {
+          tasks.push(toggleSlot(cell.slotId, cell.active));
+        }
+      }
+      await Promise.all(tasks);
+      // recharge l'état réel
+      const slots = await getVenueSlots(venueId);
+      buildCells(slots);
+      notify(t("partner.slotsSaved") || "Disponibilités enregistrées.");
+    } catch (e: any) { notify(e.message ?? "Échec de la sauvegarde"); }
     finally { setSaving(false); }
   };
 
-  const toggle = async (s: AvailabilitySlot) => {
-    setSlots((p) => p.map((x) => (x.id === s.id ? { ...x, is_active: !x.is_active } : x)));
-    if (!isDemo) { try { await toggleSlot(s.id, !s.is_active); } catch (e: any) { notify(e.message); load(); } }
-  };
-  const remove = async (s: AvailabilitySlot) => {
-    setSlots((p) => p.filter((x) => x.id !== s.id));
-    if (!isDemo) { try { await deleteSlot(s.id); } catch (e: any) { notify(e.message); load(); } }
-  };
-
-  if (loading) {
-    return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
-  }
-
-  const byDay = [...slots].sort((a, b) => a.day_of_week - b.day_of_week || a.time.localeCompare(b.time));
+  const selectedVenue = venues.find((v) => v.id === venueId);
+  const COL_W = 46;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Formulaire d'ajout */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)", gap: 12 }}>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primary }}>📅 {t("partner.addSlot") || "Nouveau créneau"}</Text>
-
-        {/* Jour */}
-        <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "600" }}>{t("partner.slotDay") || "JOUR"}</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {DAY_LABELS.map((d, i) => (
-            <TouchableOpacity key={i} onPress={() => setForm((f) => ({ ...f, day_of_week: i }))}
-              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: form.day_of_week === i ? colors.primary : colors.background, borderWidth: 1, borderColor: form.day_of_week === i ? colors.primary : colors.border }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: form.day_of_week === i ? "#0A0E13" : colors.muted }}>{d}</Text>
+      {/* Sélecteur d'établissement */}
+      <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 8 }}>
+        {t("partner.selectVenue") || "ÉTABLISSEMENT"}
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8 }}>
+        {venues.map((v) => {
+          const sel = v.id === venueId;
+          return (
+            <TouchableOpacity key={v.id} onPress={() => setVenueId(v.id)} activeOpacity={0.8}
+              style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          );
+        })}
+      </ScrollView>
 
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          {/* Heure */}
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "600", marginBottom: 4 }}>{t("partner.slotTime") || "HEURE"}</Text>
-            <TextInput value={form.time} onChangeText={(v) => setForm((f) => ({ ...f, time: v }))} placeholder="21:00" placeholderTextColor="#555"
-              style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+      {/* Légende + capacité par défaut */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#4ADE80" }} />
+            <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.available") || "Disponible"}</Text>
           </View>
-          {/* Capacité */}
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "600", marginBottom: 4 }}>{t("partner.slotCapacity") || "CAPACITÉ MAX"}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <TouchableOpacity onPress={() => setForm((f) => ({ ...f, max_capacity: Math.max(1, f.max_capacity - 1) }))} style={{ backgroundColor: colors.primary, borderRadius: 8, width: 30, height: 30, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "#0A0E13", fontWeight: "800" }}>−</Text>
-              </TouchableOpacity>
-              <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 16, minWidth: 28, textAlign: "center" }}>{form.max_capacity}</Text>
-              <TouchableOpacity onPress={() => setForm((f) => ({ ...f, max_capacity: f.max_capacity + 1 }))} style={{ backgroundColor: colors.primary, borderRadius: 8, width: 30, height: 30, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "#0A0E13", fontWeight: "800" }}>+</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#2A2F37" }} />
+            <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.unavailable") || "Indispo"}</Text>
           </View>
         </View>
-
-        <TouchableOpacity onPress={addSlot} disabled={saving} style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
-          {saving ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>{t("partner.addSlot") || "Ajouter le créneau"}</Text>}
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ fontSize: 10, color: colors.muted }}>{t("partner.slotCapacity") || "CAPACITÉ"}</Text>
+          <TouchableOpacity onPress={() => setDefaultCapacity((c) => Math.max(1, c - 1))} style={{ backgroundColor: colors.surface, borderRadius: 6, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
+            <Text style={{ color: colors.primary, fontWeight: "800" }}>−</Text>
+          </TouchableOpacity>
+          <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 14, minWidth: 22, textAlign: "center" }}>{defaultCapacity}</Text>
+          <TouchableOpacity onPress={() => setDefaultCapacity((c) => c + 1)} style={{ backgroundColor: colors.surface, borderRadius: 6, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
+            <Text style={{ color: colors.primary, fontWeight: "800" }}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {error && (
-        <View style={{ paddingVertical: 8, marginBottom: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center" }}>{error}</Text>
-        </View>
+      {loading ? (
+        <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View>
+            {/* En-tête jours */}
+            <View style={{ flexDirection: "row" }}>
+              <View style={{ width: 44 }} />
+              {DAYS_ORDER.map((d) => (
+                <View key={d} style={{ width: COL_W, alignItems: "center", paddingBottom: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: colors.muted }}>{DAY_SHORT[d]}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Lignes : une par créneau horaire */}
+            {TIME_SLOTS.map((time) => (
+              <View key={time} style={{ flexDirection: "row", marginBottom: 6, alignItems: "center" }}>
+                <View style={{ width: 44 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.foreground }}>{time}</Text>
+                </View>
+                {DAYS_ORDER.map((d) => {
+                  const cell = cells[cellKey(d, time)];
+                  const active = !!cell?.active;
+                  const full = cell ? cell.current_bookings >= cell.max_capacity : false;
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      onPress={() => toggleCell(d, time)}
+                      activeOpacity={0.7}
+                      style={{
+                        width: COL_W - 4, height: 44, marginHorizontal: 2, borderRadius: 8,
+                        backgroundColor: active ? (full ? "#EF4444" : "#4ADE80") : "#2A2F37",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {cell && (cell.slotId || active) ? (
+                        <Text style={{ fontSize: 10, fontWeight: "800", color: active ? "#0A0E13" : colors.muted }}>
+                          {cell.current_bookings}/{cell.max_capacity}
+                        </Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       )}
 
-      {/* Liste des créneaux */}
-      {byDay.length === 0 ? (
-        <View style={{ alignItems: "center", paddingVertical: 30, gap: 8 }}>
-          <Text style={{ fontSize: 32 }}>📅</Text>
-          <Text style={{ color: colors.muted, fontSize: 13 }}>{t("partner.noSlots") || "Aucun créneau défini"}</Text>
-        </View>
-      ) : byDay.map((s) => {
-        const full = s.current_bookings >= s.max_capacity;
-        return (
-          <View key={s.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: s.is_active ? colors.border : "rgba(239,68,68,0.25)", opacity: s.is_active ? 1 : 0.6 }}>
-            <View style={{ alignItems: "center", width: 48 }}>
-              <Text style={{ fontSize: 12, fontWeight: "800", color: colors.primary }}>{DAY_LABELS[s.day_of_week]}</Text>
-              <Text style={{ fontSize: 15, fontWeight: "800", color: colors.foreground }}>{s.time}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, color: colors.foreground, fontWeight: "600" }}>
-                {s.current_bookings}/{s.max_capacity} {t("partner.slotBooked") || "réservés"}
-              </Text>
-              <Text style={{ fontSize: 11, color: full ? "#EF4444" : "#4ADE80", marginTop: 2, fontWeight: "700" }}>
-                {full ? (t("partner.slotFullLabel") || "Complet") : `${s.max_capacity - s.current_bookings} ${t("booking.slotsLeft") || "restant(s)"}`}
-              </Text>
-            </View>
-            <Switch value={s.is_active} onValueChange={() => toggle(s)} trackColor={{ false: "#3A3A3A", true: "#D4AF37" }} style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} />
-            <TouchableOpacity onPress={() => remove(s)} style={{ padding: 4 }}>
-              <Text style={{ fontSize: 14, color: "#EF4444" }}>🗑</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
+      {/* Sauvegarde */}
+      <TouchableOpacity
+        onPress={save}
+        disabled={saving || !dirty}
+        activeOpacity={0.85}
+        style={{
+          marginTop: 20, backgroundColor: dirty ? colors.primary : colors.surface,
+          borderWidth: dirty ? 0 : 1, borderColor: colors.border,
+          borderRadius: 50, paddingVertical: 15, alignItems: "center", opacity: saving ? 0.6 : 1,
+        }}
+      >
+        {saving
+          ? <ActivityIndicator color="#0A0E13" />
+          : <Text style={{ color: dirty ? "#0A0E13" : colors.muted, fontWeight: "800", fontSize: 15 }}>
+              {dirty ? (t("partner.saveSlots") || "Sauvegarder") : (t("partner.allSaved") || "À jour ✓")}
+            </Text>}
+      </TouchableOpacity>
+
+      {selectedVenue && (
+        <Text style={{ fontSize: 11, color: colors.muted, textAlign: "center", marginTop: 10 }}>
+          {selectedVenue.name} · {selectedVenue.category}
+        </Text>
+      )}
     </ScrollView>
   );
 }
