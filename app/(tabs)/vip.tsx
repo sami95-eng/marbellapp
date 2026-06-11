@@ -4,6 +4,7 @@ import {
   View,
   FlatList,
   TouchableOpacity,
+  TextInput,
   Alert,
   Platform,
   ScrollView,
@@ -15,7 +16,6 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
-import { connectInstagram } from "@/lib/instagram-connect";
 import { useDemo } from "@/lib/demo-context";
 import {
   useVipData,
@@ -433,8 +433,8 @@ function MemberOfferCard({ item, colors }: { item: VipMemberPerk; colors: Return
 
 // --- Section explicative "Comment ça marche" (basée sur les posts Instagram) ---
 const VIP_STEPS = [
-  { n: "1", icon: "📸", title: "Connecte ton Instagram",
-    desc: "Lie ton compte Instagram à Marbell'app en un clic." },
+  { n: "1", icon: "📸", title: "Renseigne ton Instagram",
+    desc: "Indique ton compte Instagram dans Marbell'app." },
   { n: "2", icon: "👑", title: "Profite de l'expérience",
     desc: "Accède aux offres exclusives de nos partenaires : tables VIP, réductions et invitations privées." },
   { n: "3", icon: "🔓", title: "Partage ta soirée",
@@ -491,46 +491,83 @@ function HowItWorksVIP({ colors }: { colors: ReturnType<typeof useColors> }) {
   );
 }
 
-function InstagramGate({ isAuthenticated, router, colors, onConnect, connecting }: {
+function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }: {
   isAuthenticated: boolean; router: ReturnType<typeof useRouter>; colors: ReturnType<typeof useColors>;
-  onConnect: () => void; connecting: boolean;
+  onSaveHandle: (handle: string) => void; saving: boolean;
 }) {
+  const [handle, setHandle] = useState("");
+  const valid = handle.trim().replace(/^@/, "").length >= 2;
+
   return (
     <ScreenContainer>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 60 }}
       >
-        <View style={{ alignItems: "center", gap: 14, marginBottom: 28 }}>
+        <View style={{ alignItems: "center", gap: 14, marginBottom: 24 }}>
           <Text style={{ fontSize: 56 }}>👑</Text>
           <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary, textAlign: "center" }}>
             Accès VIP
           </Text>
           <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 22 }}>
             {isAuthenticated
-              ? "Connecte ton compte Instagram pour débloquer les offres VIP de nos établissements partenaires."
-              : "Connecte-toi à ton compte Marbell'app, puis lie ton Instagram pour accéder aux offres VIP."}
+              ? "Renseigne ton compte Instagram pour débloquer les offres VIP de nos établissements partenaires."
+              : "Connecte-toi à ton compte Marbell'app, puis renseigne ton Instagram pour accéder aux offres VIP."}
           </Text>
-          <TouchableOpacity
-            onPress={isAuthenticated ? onConnect : () => router.push("/login")}
-            disabled={connecting}
-            style={{
-              backgroundColor: "#833AB4", borderRadius: 50, paddingVertical: 14,
-              paddingHorizontal: 32, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4,
-              opacity: connecting ? 0.6 : 1,
-            }}
-            activeOpacity={0.8}
-          >
-            {connecting
-              ? <ActivityIndicator color="#fff" />
-              : <>
-                  <Text style={{ fontSize: 18 }}>📸</Text>
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
-                    {isAuthenticated ? "Connecter mon Instagram" : "Se connecter"}
-                  </Text>
-                </>}
-          </TouchableOpacity>
         </View>
+
+        {isAuthenticated ? (
+          <View style={{ marginBottom: 28, gap: 10 }}>
+            <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600", marginLeft: 4, letterSpacing: 0.5 }}>
+              TON COMPTE INSTAGRAM
+            </Text>
+            <View style={{
+              flexDirection: "row", alignItems: "center",
+              backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border,
+              paddingHorizontal: 14,
+            }}>
+              <Text style={{ fontSize: 16, color: colors.primary, fontWeight: "700" }}>@</Text>
+              <TextInput
+                value={handle}
+                onChangeText={(v) => setHandle(v.replace(/\s/g, ""))}
+                placeholder="moncompte"
+                placeholderTextColor="#555"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{ flex: 1, color: colors.foreground, fontSize: 15, paddingVertical: 14, paddingHorizontal: 6 }}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={() => onSaveHandle(handle)}
+              disabled={!valid || saving}
+              style={{
+                backgroundColor: valid ? colors.primary : "#333", borderRadius: 50,
+                paddingVertical: 14, alignItems: "center", marginTop: 4, opacity: saving ? 0.6 : 1,
+              }}
+              activeOpacity={0.85}
+            >
+              {saving
+                ? <ActivityIndicator color="#0A0E13" />
+                : <Text style={{ color: valid ? "#0A0E13" : "#666", fontWeight: "800", fontSize: 15 }}>Débloquer mon accès VIP</Text>}
+            </TouchableOpacity>
+            <Text style={{ fontSize: 11, color: colors.muted, textAlign: "center", marginTop: 2 }}>
+              Tague les établissements partenaires dans tes posts pour faire grimper ton niveau.
+            </Text>
+          </View>
+        ) : (
+          <View style={{ alignItems: "center", marginBottom: 28 }}>
+            <TouchableOpacity
+              onPress={() => router.push("/login")}
+              style={{
+                backgroundColor: colors.primary, borderRadius: 50,
+                paddingVertical: 14, paddingHorizontal: 36,
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 15 }}>Se connecter</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <HowItWorksVIP colors={colors} />
       </ScrollView>
@@ -549,28 +586,25 @@ export default function VipScreen() {
 
   const { offers, discounts, perks, loading } = useVipData();
 
-  // Nombre de posts Instagram taguant des établissements partenaires,
-  // lu depuis profiles.partner_post_count (18 en démo).
-  const { profile, refetch: refetchProfile } = useProfile(isDemoMode ? undefined : user?.id);
+  // partner_post_count est mis à jour manuellement par l'admin (18 en démo).
+  const { profile, save: saveProfile, saving: savingProfile } = useProfile(isDemoMode ? undefined : user?.id);
 
-  // Instagram « connecté » si login Instagram OU handle renseigné par l'Edge Function.
+  // Instagram « connecté » si login Instagram OU handle renseigné manuellement.
   const isInstagramUser =
     isDemoMode ||
     (isAuthenticated && (user?.loginMethod === "instagram" || !!profile?.instagram_handle));
 
-  const [connectingIg, setConnectingIg] = useState(false);
-  const handleConnectInstagram = useCallback(async () => {
+  // Enregistre le handle Instagram saisi manuellement dans profiles.instagram_handle.
+  const handleSaveHandle = useCallback(async (handle: string) => {
+    const h = handle.trim().replace(/^@/, "");
+    if (!h) return;
     try {
-      setConnectingIg(true);
-      const res = await connectInstagram(); // web : redirige ; natif : renvoie le résultat
-      if (res) await refetchProfile();
+      await saveProfile({ instagram_handle: h });
     } catch (e: any) {
-      const msg = e?.message ?? "Connexion Instagram impossible.";
+      const msg = e?.message ?? "Échec de l'enregistrement.";
       if (Platform.OS === "web") window.alert(msg); else Alert.alert("Instagram", msg);
-    } finally {
-      setConnectingIg(false);
     }
-  }, [refetchProfile]);
+  }, [saveProfile]);
 
   const partnerPosts = isDemoMode ? 18 : (profile?.partner_post_count ?? 0);
   const currentTier: TierKey =
@@ -633,8 +667,8 @@ export default function VipScreen() {
         isAuthenticated={isAuthenticated}
         router={router}
         colors={colors}
-        onConnect={handleConnectInstagram}
-        connecting={connectingIg}
+        onSaveHandle={handleSaveHandle}
+        saving={savingProfile}
       />
     );
   }
