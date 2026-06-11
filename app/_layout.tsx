@@ -240,6 +240,7 @@ function RootLayoutInner() {
                 <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
                 <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
                 <Stack.Screen name="oauth/callback" options={{ animation: "fade" }} />
+                <Stack.Screen name="instagram-callback" options={{ animation: "fade" }} />
                 <Stack.Screen name="venues" />
                 <Stack.Screen name="venue-detail" />
                 <Stack.Screen name="booking" />

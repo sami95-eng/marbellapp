@@ -15,6 +15,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
+import { connectInstagram } from "@/lib/instagram-connect";
 import { useDemo } from "@/lib/demo-context";
 import {
   useVipData,
@@ -490,8 +491,9 @@ function HowItWorksVIP({ colors }: { colors: ReturnType<typeof useColors> }) {
   );
 }
 
-function InstagramGate({ isAuthenticated, router, colors }: {
+function InstagramGate({ isAuthenticated, router, colors, onConnect, connecting }: {
   isAuthenticated: boolean; router: ReturnType<typeof useRouter>; colors: ReturnType<typeof useColors>;
+  onConnect: () => void; connecting: boolean;
 }) {
   return (
     <ScreenContainer>
@@ -507,20 +509,26 @@ function InstagramGate({ isAuthenticated, router, colors }: {
           <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 22 }}>
             {isAuthenticated
               ? "Connecte ton compte Instagram pour débloquer les offres VIP de nos établissements partenaires."
-              : "Connecte-toi avec Instagram pour accéder aux offres VIP exclusives de Marbella."}
+              : "Connecte-toi à ton compte Marbell'app, puis lie ton Instagram pour accéder aux offres VIP."}
           </Text>
           <TouchableOpacity
-            onPress={() => router.push("/login")}
+            onPress={isAuthenticated ? onConnect : () => router.push("/login")}
+            disabled={connecting}
             style={{
               backgroundColor: "#833AB4", borderRadius: 50, paddingVertical: 14,
               paddingHorizontal: 32, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4,
+              opacity: connecting ? 0.6 : 1,
             }}
             activeOpacity={0.8}
           >
-            <Text style={{ fontSize: 18 }}>📸</Text>
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
-              {isAuthenticated ? "Connecter Instagram" : "Se connecter avec Instagram"}
-            </Text>
+            {connecting
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                  <Text style={{ fontSize: 18 }}>📸</Text>
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+                    {isAuthenticated ? "Connecter mon Instagram" : "Se connecter"}
+                  </Text>
+                </>}
           </TouchableOpacity>
         </View>
 
@@ -541,11 +549,29 @@ export default function VipScreen() {
 
   const { offers, discounts, perks, loading } = useVipData();
 
-  const isInstagramUser = isDemoMode || (isAuthenticated && user?.loginMethod === "instagram");
-
   // Nombre de posts Instagram taguant des établissements partenaires,
   // lu depuis profiles.partner_post_count (18 en démo).
-  const { profile } = useProfile(isDemoMode ? undefined : user?.id);
+  const { profile, refetch: refetchProfile } = useProfile(isDemoMode ? undefined : user?.id);
+
+  // Instagram « connecté » si login Instagram OU handle renseigné par l'Edge Function.
+  const isInstagramUser =
+    isDemoMode ||
+    (isAuthenticated && (user?.loginMethod === "instagram" || !!profile?.instagram_handle));
+
+  const [connectingIg, setConnectingIg] = useState(false);
+  const handleConnectInstagram = useCallback(async () => {
+    try {
+      setConnectingIg(true);
+      const res = await connectInstagram(); // web : redirige ; natif : renvoie le résultat
+      if (res) await refetchProfile();
+    } catch (e: any) {
+      const msg = e?.message ?? "Connexion Instagram impossible.";
+      if (Platform.OS === "web") window.alert(msg); else Alert.alert("Instagram", msg);
+    } finally {
+      setConnectingIg(false);
+    }
+  }, [refetchProfile]);
+
   const partnerPosts = isDemoMode ? 18 : (profile?.partner_post_count ?? 0);
   const currentTier: TierKey =
     partnerPosts >= 30 ? "platinum" :
@@ -602,7 +628,15 @@ export default function VipScreen() {
   );
 
   if (!isInstagramUser) {
-    return <InstagramGate isAuthenticated={isAuthenticated} router={router} colors={colors} />;
+    return (
+      <InstagramGate
+        isAuthenticated={isAuthenticated}
+        router={router}
+        colors={colors}
+        onConnect={handleConnectInstagram}
+        connecting={connectingIg}
+      />
+    );
   }
 
   if (loading) {
