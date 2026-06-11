@@ -114,17 +114,17 @@ export const VENUE_IMAGES: Record<string, string> = {
   "casino-marbella":
     "https://images.unsplash.com/photo-1501281668745-b8ceab298bc1?auto=format&fit=crop&w=800&q=80",
 
-  // ── Shopping ──────────────────────────────────────────────────────
-  "puerto-banus-shopping":
-    "https://images.unsplash.com/photo-1569949381669-ecf0e3ae2b41?auto=format&fit=crop&w=800&q=80",
-  "puerto-banus":
-    "https://images.unsplash.com/photo-1569949381669-ecf0e3ae2b41?auto=format&fit=crop&w=800&q=80",
-  "la-canada-shopping":
-    "https://images.unsplash.com/photo-1555529902-5261145633bf?auto=format&fit=crop&w=800&q=80",
-  "la-canada":
-    "https://images.unsplash.com/photo-1555529902-5261145633bf?auto=format&fit=crop&w=800&q=80",
-  "marbella-old-town":
-    "https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=800&q=80",
+  // ── Activités Aquatiques (Water Sports) ──────────────────────────
+  "jet-ski-marbella":
+    "https://images.unsplash.com/photo-1626447857058-2ba6a8868cb5?auto=format&fit=crop&w=800&q=80",
+  "marbella-boat-charter":
+    "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80",
+  "puerto-banus-watersports":
+    "https://images.unsplash.com/photo-1530870110042-98b2cb110834?auto=format&fit=crop&w=800&q=80",
+  "parasailing-marbella":
+    "https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&w=800&q=80",
+  "flyboard-marbella":
+    "https://images.unsplash.com/photo-1502933691298-84fc14542831?auto=format&fit=crop&w=800&q=80",
 
   // ── Hotels ────────────────────────────────────────────────────────
   "nobu-hotel-marbella":
@@ -157,8 +157,8 @@ export const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
     "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=800&q=80",
   "Events":
     "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=800&q=80",
-  "Shopping":
-    "https://images.unsplash.com/photo-1555529902-5261145633bf?auto=format&fit=crop&w=800&q=80",
+  "Water Sports":
+    "https://images.unsplash.com/photo-1530870110042-98b2cb110834?auto=format&fit=crop&w=800&q=80",
   "Hotel":
     "https://images.unsplash.com/photo-1551882547-ff40c599fb00?auto=format&fit=crop&w=800&q=80",
 };

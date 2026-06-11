@@ -22,7 +22,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
   "Spa & Wellness": "🧖",
   "Nightlife":      "🎉",
   "Events":         "🌟",
-  "Shopping":       "🛍️",
+  "Water Sports":   "🌊",
   "Hotel":          "🏨",
 };
 

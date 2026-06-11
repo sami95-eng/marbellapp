@@ -35,7 +35,7 @@ export const CATEGORY_MAP: Record<string, string> = {
   "spas":         "Spa & Wellness",
   "nightlife":    "Nightlife",
   "events":       "Events",
-  "shopping":     "Shopping",
+  "shopping":     "Water Sports",
   "hotel":        "Hotel",
 };
 
@@ -46,7 +46,7 @@ export const CATEGORY_REVERSE_MAP: Record<string, string> = {
   "Spa & Wellness": "spas",
   "Nightlife":      "nightlife",
   "Events":         "events",
-  "Shopping":       "shopping",
+  "Water Sports":   "shopping",
   "Hotel":          "hotel",
 };
 
@@ -57,7 +57,7 @@ export const DEFAULT_OFFERS: Record<string, string[]> = {
   "Spa & Wellness": ["Signature Massage", "Facial Treatments", "Hydrotherapy", "Yoga Classes", "Couples Retreat"],
   "Nightlife":      ["VIP Packages", "Bottle Service", "Guest List", "Private Booth", "After Party"],
   "Events":         ["VIP Tickets", "Backstage Access", "Gourmet Dining", "Meet & Greet", "Private Box"],
-  "Shopping":       ["Personal Shopper", "VIP Access", "Luxury Brands", "Waterfront Dining", "Yacht Charter"],
+  "Water Sports":   ["Jet Ski Rental", "Boat Charter", "Parasailing", "Flyboard", "Wakeboard & Ski"],
   "Hotel":          ["Spa Access", "Fine Dining", "Concierge", "Pool Access", "Room Service"],
 };
 
@@ -69,7 +69,7 @@ export async function getFeaturedVenues(limit = 6): Promise<Venue[]> {
     .from("venues")
     .select("*")
     .eq("is_active", true)
-    .not("category", "in", '("Hotel","Shopping")')
+    .not("category", "in", '("Hotel")')
     .order("rating", { ascending: false })
     .limit(limit);
 

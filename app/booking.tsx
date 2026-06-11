@@ -4,7 +4,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import { useVenueTables } from "@/hooks/use-tables";
@@ -14,6 +14,7 @@ import type { VenueTable } from "@/lib/tables-service";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { createBooking } from "@/lib/bookings-service";
+import { getAvailableSlots, bookSlot, type AvailabilitySlot } from "@/lib/availability-service";
 
 // ── Table selector card ────────────────────────────────────────────
 function TableCard({
@@ -159,6 +160,27 @@ export default function BookingScreen() {
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Créneaux de disponibilité définis par l'établissement
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+
+  // Charge les créneaux disponibles pour le jour de la date choisie
+  useEffect(() => {
+    if (isDemoMode || !venueUuidParam || !date) { setSlots([]); setSelectedSlot(null); return; }
+    const day = new Date(date).getDay(); // 0 = dimanche … 6 = samedi
+    if (Number.isNaN(day)) { setSlots([]); return; }
+    let cancelled = false;
+    setSlotsLoading(true);
+    getAvailableSlots(venueUuidParam, day)
+      .then((s) => { if (!cancelled) { setSlots(s); setSelectedSlot(null); } })
+      .catch(() => { if (!cancelled) setSlots([]); })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
+    return () => { cancelled = true; };
+  }, [venueUuidParam, date, isDemoMode]);
+
+  const hasSlotSystem = !isDemoMode && !!venueUuidParam;
+
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)");
@@ -174,7 +196,31 @@ export default function BookingScreen() {
       return;
     }
 
+    // Si l'établissement gère des créneaux, il faut en choisir un disponible
+    if (hasSlotSystem && slots.length > 0 && !selectedSlot) {
+      const msg = t("booking.selectSlotRequired");
+      if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
+      return;
+    }
+
     setIsSubmitting(true);
+
+    // Réserve la place sur le créneau (incrément atomique). Si complet → stop.
+    if (selectedSlot) {
+      try {
+        const ok = await bookSlot(selectedSlot.id);
+        if (!ok) {
+          const msg = t("booking.slotFull");
+          if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
+          setSlots((prev) => prev.filter((s) => s.id !== selectedSlot.id)); // disparaît
+          setSelectedSlot(null);
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (e: any) {
+        console.warn("[booking] bookSlot failed:", e?.message);
+      }
+    }
 
     // Generate confirmation number once, share between navigation + email
     const confirmNum = `MSS-${Date.now().toString(36).toUpperCase().slice(-6)}`;
@@ -394,17 +440,60 @@ export default function BookingScreen() {
           />
         </View>
 
-        {/* ── Time ────────────────────────────────────────────────── */}
-        <View style={cardStyle}>
-          <Text style={labelStyle}>{t("booking.time")}</Text>
-          <TextInput
-            value={time}
-            onChangeText={setTime}
-            placeholder="HH:MM"
-            placeholderTextColor="#555"
-            style={inputStyle}
-          />
-        </View>
+        {/* ── Créneaux disponibles (si l'établissement en définit) ── */}
+        {hasSlotSystem && (
+          <View style={cardStyle}>
+            <Text style={labelStyle}>{t("booking.availableSlots")}</Text>
+            {slotsLoading ? (
+              <View style={{ height: 44, justifyContent: "center" }}>
+                <ActivityIndicator color="#D4AF37" />
+              </View>
+            ) : slots.length === 0 ? (
+              <Text style={{ fontSize: 12, color: "#666", lineHeight: 18 }}>
+                {t("booking.noSlots")}
+              </Text>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
+                {slots.map((s) => {
+                  const sel = selectedSlot?.id === s.id;
+                  const left = s.max_capacity - s.current_bookings;
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      onPress={() => { setSelectedSlot(s); setTime(s.time); }}
+                      activeOpacity={0.8}
+                      style={{
+                        paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+                        backgroundColor: sel ? "#D4AF37" : "#1a1a2e",
+                        borderWidth: 1, borderColor: sel ? "#D4AF37" : "rgba(212,175,55,0.25)",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: sel ? "#0a0a0f" : "#e8e8e8", fontWeight: "800", fontSize: 14 }}>{s.time}</Text>
+                      <Text style={{ color: sel ? "#0a0a0f" : "#888", fontSize: 9, marginTop: 2 }}>
+                        {left} {t("booking.slotsLeft")}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── Time (saisie libre — si pas de système de créneaux) ──── */}
+        {(!hasSlotSystem || slots.length === 0) && (
+          <View style={cardStyle}>
+            <Text style={labelStyle}>{t("booking.time")}</Text>
+            <TextInput
+              value={time}
+              onChangeText={setTime}
+              placeholder="HH:MM"
+              placeholderTextColor="#555"
+              style={inputStyle}
+            />
+          </View>
+        )}
 
         {/* ── Guests ──────────────────────────────────────────────── */}
         <View style={cardStyle}>

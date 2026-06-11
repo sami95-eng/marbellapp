@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
+import { HomeIcon, CrownIcon, BookmarkIcon, PersonIcon } from "@/components/ui/tab-icons";
 import { Platform } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import { useTranslation } from "react-i18next";
@@ -33,28 +33,28 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t("tab.home"),
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => <HomeIcon size={26} color={color} />,
         }}
       />
       <Tabs.Screen
         name="vip"
         options={{
           title: t("tab.vip"),
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="crown.fill" color={color} />,
+          tabBarIcon: ({ color }) => <CrownIcon size={26} color={color} />,
         }}
       />
       <Tabs.Screen
         name="bookings"
         options={{
           title: t("tab.bookings"),
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bookmark.fill" color={color} />,
+          tabBarIcon: ({ color }) => <BookmarkIcon size={26} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: t("tab.profile"),
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          tabBarIcon: ({ color }) => <PersonIcon size={26} color={color} />,
         }}
       />
     </Tabs>

@@ -29,7 +29,7 @@ export default function HomeScreen() {
     { id: "spas",        icon: "🧘",  name: t("cat.spas"),        description: t("cat.spasDesc") },
     { id: "nightlife",   icon: "🎉",  name: t("cat.nightlife"),   description: t("cat.nightlifeDesc") },
     { id: "events",      icon: "✨",  name: t("cat.events"),      description: t("cat.eventsDesc") },
-    { id: "shopping",    icon: "🛍️", name: t("cat.shopping"),    description: t("cat.shoppingDesc") },
+    { id: "shopping",    icon: "🌊",  name: t("cat.shopping"),    description: t("cat.shoppingDesc") },
   ];
 
   const renderCategoryItem = ({ item, index }: { item: typeof CATEGORIES[0]; index: number }) => (
