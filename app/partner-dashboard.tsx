@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getManagedBookings, updateBookingStatus, updateBookingSchedule } from "@/lib/bookings-service";
 import { getVenueBySlug } from "@/lib/venues-service";
 import {
-  getVenueSlots, createSlot, toggleSlot, deleteSlot, type AvailabilitySlot,
+  getVenueSlots, createSlot, toggleSlot, deleteSlot, releaseSlot, type AvailabilitySlot,
 } from "@/lib/availability-service";
 
 type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "stats";
@@ -107,6 +107,7 @@ type PartnerRow = {
   tableName?: string | null;
   tablePrice?: number | null;
   confirmationNumber?: string | null;
+  slotId?: string | null;
 };
 
 function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
@@ -177,6 +178,7 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
         tableName: b.table_name,
         tablePrice: b.table_price,
         confirmationNumber: b.confirmation_number,
+        slotId: b.slot_id,
       })));
     } catch (e: any) {
       setError(e.message ?? "Erreur de chargement");
@@ -227,6 +229,10 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
       if (!isDemo) {
         await updateBookingStatus(row.id, status);
         console.warn(`[decide] OK id=${row.id} → ${status} (email=${emailType})`);
+        // Annulation/refus → libère la place sur le créneau de disponibilité
+        if (status === "cancelled" && row.slotId) {
+          releaseSlot(row.slotId).catch((e) => console.warn("[decide] releaseSlot failed:", e?.message));
+        }
         // Email au client (non bloquant) — confirmation / refus / annulation
         if (row.userEmail) {
           supabase.functions.invoke("booking-notification", {

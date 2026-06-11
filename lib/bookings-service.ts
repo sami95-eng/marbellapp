@@ -19,6 +19,7 @@ export interface Booking {
   user_name: string | null;
   status: "confirmed" | "pending" | "cancelled" | "completed";
   confirmation_number: string | null;
+  slot_id: string | null;
   created_at: string;
 }
 

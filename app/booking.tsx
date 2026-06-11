@@ -256,6 +256,7 @@ export default function BookingScreen() {
           user_name:           user?.name || (authUser?.email ?? user?.email ?? "").split("@")[0] || null,
           status:              "pending" as const,
           confirmation_number: confirmNum,
+          slot_id:             selectedSlot?.id ?? null,
         };
         console.warn("[BOOKING] payload:", JSON.stringify(payload));
 

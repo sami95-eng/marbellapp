@@ -59,6 +59,26 @@ $$;
 
 grant execute on function public.book_slot(uuid) to authenticated;
 
+-- Lien réservation → créneau (pour pouvoir libérer la place à l'annulation)
+alter table public.bookings
+  add column if not exists slot_id uuid references public.availability_slots(id) on delete set null;
+
+-- Libère une place sur un créneau (décrément, plancher à 0).
+-- Appelé lors d'une annulation (client ou partenaire).
+create or replace function public.release_slot(slot_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  update public.availability_slots
+     set current_bookings = greatest(0, current_bookings - 1)
+   where id = slot_id;
+end;
+$$;
+
+grant execute on function public.release_slot(uuid) to authenticated;
+
 -- ── Vérification ─────────────────────────────────────────────────
 SELECT venue_id, day_of_week, time, max_capacity, current_bookings, is_active
 FROM public.availability_slots ORDER BY venue_id, day_of_week, time;

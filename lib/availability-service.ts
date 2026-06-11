@@ -76,3 +76,9 @@ export async function bookSlot(slotId: string): Promise<boolean> {
   if (error) throw new Error(error.message);
   return data === true;
 }
+
+/** Libère une place sur un créneau (décrément via RPC release_slot) — à l'annulation. */
+export async function releaseSlot(slotId: string): Promise<void> {
+  const { error } = await supabase.rpc("release_slot", { slot_id: slotId });
+  if (error) throw new Error(error.message);
+}
