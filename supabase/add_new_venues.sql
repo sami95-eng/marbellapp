@@ -5,9 +5,11 @@
 -- Exécuter dans Supabase SQL Editor → New Query → Run
 -- =================================================================
 
--- 1) Supprime la discothèque Olivia Valère (uniquement le nightclub).
+-- 1) Soft delete de la discothèque Olivia Valère (fermée) : is_active = false.
+--    On NE supprime PAS la ligne (préserve les FK : bookings, reviews, etc.).
 --    LOV et Nao (restaurants) ne sont PAS concernés.
-DELETE FROM public.venues
+UPDATE public.venues
+SET is_active = false
 WHERE slug = 'olivia-valere'
    OR (category = 'Nightlife' AND name ILIKE '%olivia val%re%');
 
@@ -93,8 +95,33 @@ VALUES
 ON CONFLICT (slug) DO UPDATE
   SET category = 'Fine Dining', is_active = true;
 
--- 4) Vérification
-SELECT slug, name, group_name, category, is_active FROM public.venues
+-- =================================================================
+-- 4) VRAIES PHOTOS — à remplir avec les URLs officielles
+-- -----------------------------------------------------------------
+-- Les cover_image_url ci-dessus sont des photos Unsplash génériques
+-- (fonctionnelles). Pour les VRAIES photos :
+--   Méthode recommandée — Supabase Storage (bucket "venues", déjà créé) :
+--     1. Dashboard → Storage → bucket venues → upload la photo de chaque venue
+--        (bucket public, ou génère une URL signée longue durée).
+--     2. Copie l'URL publique et colle-la ci-dessous, puis décommente.
+--   Alternative : colle directement une URL d'image hotlinkable du site
+--   officiel (souvent .../wp-content/uploads/...jpg).
+--   ⚠️ NE PAS utiliser d'URL Instagram (scontent…) : référer-lockée + expire.
+--
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'casanis-bistrot';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'la-plage-casanis';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'mamzel-finca-besaya';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'nota-blu-brasserie';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'le-jade-marbella';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'trocadero-arena';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'trocadero-playa';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'trocadero-petit-playa';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'divot-gastro-grill';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'lov-marbella';
+-- UPDATE public.venues SET cover_image_url = 'https://…' WHERE slug = 'nao-marbella';
+
+-- 5) Vérification
+SELECT slug, name, group_name, category, is_active, cover_image_url FROM public.venues
 WHERE group_name IN ('Groupe Casanis', 'Grupo Trocadero')
    OR slug IN ('divot-gastro-grill', 'lov-marbella', 'nao-marbella')
 ORDER BY group_name NULLS LAST, name;
