@@ -76,7 +76,7 @@ VALUES
    4.5, '€€€', 55, false, true)
 ON CONFLICT (slug) DO NOTHING;
 
--- 3) LOV et Nao : conservés / créés en tant que RESTAURANTS (Fine Dining)
+-- 3) LOV (restaurant / Fine Dining) et Nao (Beach Club)
 INSERT INTO public.venues
   (slug, name, category, description, address, website, instagram_handle,
    cover_image_url, rating, price_range, avg_price_eur, is_partner, is_active)
@@ -87,13 +87,13 @@ VALUES
    'https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&w=800&q=80',
    4.5, '€€€', 65, false, true),
 
-  ('nao-marbella', 'Nao', 'Fine Dining',
-   'Restaurant méditerranéen et lounge : cuisine de partage et ambiance élégante.',
+  ('nao-marbella', 'Nao', 'Beach Club',
+   'Beach club et restaurant en bord de mer : cuisine de partage, transats et cocktails au coucher du soleil.',
    'Marbella', 'https://example.com', '@naomarbella',
-   'https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?auto=format&fit=crop&w=800&q=80',
+   'https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=800&q=80',
    4.5, '€€€', 60, false, true)
 ON CONFLICT (slug) DO UPDATE
-  SET category = 'Fine Dining', is_active = true;
+  SET category = EXCLUDED.category, is_active = true;
 
 -- =================================================================
 -- 4) VRAIES PHOTOS — à remplir avec les URLs officielles
