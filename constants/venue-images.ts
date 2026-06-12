@@ -86,9 +86,13 @@ export const VENUE_IMAGES: Record<string, string> = {
   "spa-marbella-club":
     "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80",
 
+  // ── Restaurants (ex-Olivia Valère) ───────────────────────────────
+  "lov-marbella":
+    "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&w=800&q=80",
+  "nao-marbella":
+    "https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?auto=format&fit=crop&w=800&q=80",
+
   // ── Nightlife ─────────────────────────────────────────────────────
-  "olivia-valere":
-    "https://images.unsplash.com/photo-1567760200592-13504b6d495a?auto=format&fit=crop&w=800&q=80",
   "mirage-nightclub":
     "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80",
   "pangea":

@@ -58,9 +58,9 @@ export const DEMO_BOOKINGS = [
   },
   {
     id: "b4", user_id: "demo", venue_id: null,
-    venue_name: "Olivia Valere", venue_slug: "olivia-valere", venue_category: "Nightlife",
-    date: "2026-05-10", time: "23:30", guests: 5,
-    table_id: null, table_name: "VIP Booth", table_price: 3000,
+    venue_name: "LOV Marbella", venue_slug: "lov-marbella", venue_category: "Fine Dining",
+    date: "2026-05-10", time: "21:30", guests: 5,
+    table_id: null, table_name: "Chef's Table", table_price: 800,
     notes: null, status: "cancelled", confirmation_number: "MSS-DEMO04",
     created_at: new Date().toISOString(),
   },
