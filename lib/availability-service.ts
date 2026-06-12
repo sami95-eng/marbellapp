@@ -47,6 +47,13 @@ export async function getAvailableSlots(venueId: string, dayOfWeek: number): Pro
   return ((data ?? []) as AvailabilitySlot[]).filter((s) => s.current_bookings < s.max_capacity);
 }
 
+/** Crée plusieurs créneaux en un seul appel (sauvegarde de la grille). */
+export async function createSlots(slots: NewSlot[]): Promise<void> {
+  if (slots.length === 0) return;
+  const { error } = await supabase.from("availability_slots").insert(slots);
+  if (error) throw new Error(error.message);
+}
+
 export async function createSlot(slot: NewSlot): Promise<AvailabilitySlot> {
   const { data, error } = await supabase
     .from("availability_slots")

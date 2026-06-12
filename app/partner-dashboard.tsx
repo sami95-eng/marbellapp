@@ -15,9 +15,9 @@ import type { VenueTable } from "@/lib/tables-service";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { getManagedBookings, updateBookingStatus, updateBookingSchedule } from "@/lib/bookings-service";
-import { getAllVenuesBasic } from "@/lib/venues-service";
+import { getAllVenuesBasic, updateVenueSlotConfig, type VenueBasic } from "@/lib/venues-service";
 import {
-  getVenueSlots, createSlot, toggleSlot, releaseSlot, type AvailabilitySlot,
+  getVenueSlots, createSlots, toggleSlot, releaseSlot, type AvailabilitySlot,
 } from "@/lib/availability-service";
 
 type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "stats";
@@ -518,33 +518,52 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Availability Tab — calendrier hebdo (jour × heure) + sélecteur de venue
+// Availability Tab — calendrier hebdo (créneaux 30 min, fenêtre par venue)
 // ─────────────────────────────────────────────────────────────────────────────
-const TIME_SLOTS = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00", "00:00"];
 const DAYS_ORDER = [1, 2, 3, 4, 5, 6, 0];                       // Lun → Dim (day_of_week)
 const DAY_SHORT: Record<number, string> = { 0: "Dim", 1: "Lun", 2: "Mar", 3: "Mer", 4: "Jeu", 5: "Ven", 6: "Sam" };
 const cellKey = (day: number, time: string) => `${day}-${time}`;
 
-type Cell = { slotId?: string; active: boolean; max_capacity: number; current_bookings: number };
+const toMin = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+const fromMin = (mins: number) => {
+  const x = ((mins % 1440) + 1440) % 1440;
+  return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
+};
+// Génère les créneaux toutes les 30 min entre start et end (end<=start ⇒ +1 jour)
+function genTimes(start: string, end: string): string[] {
+  const s = toMin(start);
+  let e = toMin(end);
+  if (e <= s) e += 1440;
+  const out: string[] = [];
+  for (let m = s; m < e; m += 30) out.push(fromMin(m));
+  return out;
+}
 
-const DEMO_VENUE = { id: "demo", name: DEMO_PARTNER.name, category: "Beach Club" };
+const DEMO_VENUE: VenueBasic = { id: "demo", name: DEMO_PARTNER.name, category: "Beach Club", slot_start: "10:00", slot_end: "00:00", default_capacity: 10 };
 const DEMO_SLOTS: AvailabilitySlot[] = [
   { id: "ds1", venue_id: "demo", day_of_week: 5, time: "20:00", max_capacity: 12, current_bookings: 8, is_active: true, created_at: "" },
-  { id: "ds2", venue_id: "demo", day_of_week: 5, time: "22:00", max_capacity: 12, current_bookings: 12, is_active: true, created_at: "" },
-  { id: "ds3", venue_id: "demo", day_of_week: 6, time: "22:00", max_capacity: 16, current_bookings: 4, is_active: true, created_at: "" },
+  { id: "ds2", venue_id: "demo", day_of_week: 5, time: "22:00", max_capacity: 12, current_bookings: 12, is_active: false, created_at: "" },
+  { id: "ds3", venue_id: "demo", day_of_week: 6, time: "22:30", max_capacity: 16, current_bookings: 4, is_active: true, created_at: "" },
 ];
 
 function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
   const { t } = useTranslation();
-  const [venues, setVenues]   = useState<{ id: string; name: string; category: string }[]>([]);
+  const [venues, setVenues]   = useState<VenueBasic[]>([]);
   const [venueId, setVenueId] = useState<string | null>(null);
-  const [cells, setCells]     = useState<Record<string, Cell>>({});
+  const [original, setOriginal] = useState<Record<string, AvailabilitySlot>>({});
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({}); // toggles locaux
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
-  const [dirty, setDirty]     = useState(false);
-  const [defaultCapacity, setDefaultCapacity] = useState(10);
+
+  // Fenêtre horaire + capacité (éditables) de la venue sélectionnée
+  const [start, setStart] = useState("10:00");
+  const [end, setEnd]     = useState("00:00");
+  const [capacity, setCapacity] = useState(10);
+  const [cfgOrig, setCfgOrig] = useState({ start: "10:00", end: "00:00", capacity: 10 });
 
   const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+  const selectedVenue = venues.find((v) => v.id === venueId);
+  const times = genTimes(/^\d{1,2}:\d{2}$/.test(start) ? start : "10:00", /^\d{1,2}:\d{2}$/.test(end) ? end : "00:00");
 
   // Charge la liste des établissements (admin = tous)
   useEffect(() => {
@@ -561,88 +580,102 @@ function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
     return () => { cancelled = true; };
   }, [isDemo]);
 
-  // Construit la grille de cellules à partir des créneaux d'une venue
-  const buildCells = useCallback((slots: AvailabilitySlot[]) => {
-    const map: Record<string, Cell> = {};
-    for (const s of slots) {
-      map[cellKey(s.day_of_week, s.time)] = {
-        slotId: s.id, active: s.is_active, max_capacity: s.max_capacity, current_bookings: s.current_bookings,
-      };
-    }
-    setCells(map);
-    setDirty(false);
-  }, []);
-
-  // (Re)charge les créneaux quand la venue change
+  // (Re)charge créneaux + config quand la venue change
   useEffect(() => {
     if (!venueId) return;
+    const v = venues.find((x) => x.id === venueId);
+    if (v) {
+      setStart(v.slot_start); setEnd(v.slot_end); setCapacity(v.default_capacity);
+      setCfgOrig({ start: v.slot_start, end: v.slot_end, capacity: v.default_capacity });
+    }
     let cancelled = false;
     setLoading(true);
+    setOverrides({});
     (async () => {
       try {
-        const slots = isDemo
-          ? DEMO_SLOTS
-          : await getVenueSlots(venueId);
-        if (!cancelled) buildCells(slots);
+        const slots = isDemo ? DEMO_SLOTS : await getVenueSlots(venueId);
+        if (cancelled) return;
+        const map: Record<string, AvailabilitySlot> = {};
+        for (const s of slots) map[cellKey(s.day_of_week, s.time)] = s;
+        setOriginal(map);
       } catch (e: any) { if (!cancelled) notify(e.message ?? "Erreur de chargement"); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [venueId, isDemo, buildCells]);
+  }, [venueId, isDemo, venues]);
 
-  // Toggle d'une cellule (local) — vert/gris
-  const toggleCell = (day: number, time: string) => {
-    const key = cellKey(day, time);
-    setCells((prev) => {
-      const cur = prev[key];
-      const next = { ...prev };
-      if (!cur) {
-        // pas de créneau → on l'active (création à la sauvegarde)
-        next[key] = { active: true, max_capacity: defaultCapacity, current_bookings: 0 };
-      } else {
-        next[key] = { ...cur, active: !cur.active };
-      }
-      return next;
-    });
-    setDirty(true);
+  // État effectif d'une cellule : override > slot existant > actif par défaut
+  const isActive = (key: string): boolean => {
+    if (key in overrides) return overrides[key];
+    const s = original[key];
+    return s ? s.is_active : true; // tout activé par défaut
   };
 
-  // Sauvegarde : crée les nouveaux créneaux, met à jour les is_active modifiés
+  const toggleCell = (day: number, time: string) => {
+    const key = cellKey(day, time);
+    setOverrides((prev) => ({ ...prev, [key]: !isActive(key) }));
+  };
+
+  // Y a-t-il des changements à sauvegarder ?
+  const configChanged = start !== cfgOrig.start || end !== cfgOrig.end || capacity !== cfgOrig.capacity;
+  const gridChanged = (() => {
+    for (const time of times) {
+      for (const d of DAYS_ORDER) {
+        const key = cellKey(d, time);
+        const eff = isActive(key);
+        const s = original[key];
+        if (s) { if (eff !== s.is_active) return true; }
+        else if (eff) return true; // création
+      }
+    }
+    return false;
+  })();
+  const dirty = configChanged || gridChanged;
+
   const save = async () => {
-    if (isDemo) { setDirty(false); notify("Mode démo — changements non persistés."); return; }
+    if (isDemo) { notify("Mode démo — changements non persistés."); return; }
     if (!venueId) return;
+    if (!/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) { notify(t("partner.slotTimeFormat")); return; }
     setSaving(true);
     try {
-      const tasks: Promise<unknown>[] = [];
-      for (const [key, cell] of Object.entries(cells)) {
-        const [dayStr, time] = key.split(/-(.+)/); // split au 1er tiret (time contient ":")
-        const day = parseInt(dayStr);
-        if (!cell.slotId) {
-          // nouveau créneau (uniquement si activé)
-          if (cell.active) tasks.push(createSlot({ venue_id: venueId, day_of_week: day, time, max_capacity: cell.max_capacity }));
-        } else {
-          tasks.push(toggleSlot(cell.slotId, cell.active));
+      // 1) Config venue (fenêtre + capacité)
+      if (configChanged) {
+        await updateVenueSlotConfig(venueId, { slot_start: start, slot_end: end, default_capacity: capacity });
+        setCfgOrig({ start, end, capacity });
+      }
+      // 2) Diff de la grille
+      const toCreate: { venue_id: string; day_of_week: number; time: string; max_capacity: number }[] = [];
+      const toggles: Promise<unknown>[] = [];
+      for (const time of times) {
+        for (const d of DAYS_ORDER) {
+          const key = cellKey(d, time);
+          const eff = isActive(key);
+          const s = original[key];
+          if (s) { if (eff !== s.is_active) toggles.push(toggleSlot(s.id, eff)); }
+          else if (eff) toCreate.push({ venue_id: venueId, day_of_week: d, time, max_capacity: capacity });
         }
       }
-      await Promise.all(tasks);
-      // recharge l'état réel
+      await Promise.all([createSlots(toCreate), ...toggles]);
+      // 3) Recharge l'état réel
       const slots = await getVenueSlots(venueId);
-      buildCells(slots);
-      notify(t("partner.slotsSaved") || "Disponibilités enregistrées.");
+      const map: Record<string, AvailabilitySlot> = {};
+      for (const s of slots) map[cellKey(s.day_of_week, s.time)] = s;
+      setOriginal(map);
+      setOverrides({});
+      notify(t("partner.slotsSaved"));
     } catch (e: any) { notify(e.message ?? "Échec de la sauvegarde"); }
     finally { setSaving(false); }
   };
 
-  const selectedVenue = venues.find((v) => v.id === venueId);
   const COL_W = 46;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Sélecteur d'établissement */}
       <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 8 }}>
-        {t("partner.selectVenue") || "ÉTABLISSEMENT"}
+        {t("partner.selectVenue")}
       </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8 }}>
         {venues.map((v) => {
           const sel = v.id === venueId;
           return (
@@ -654,27 +687,45 @@ function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
         })}
       </ScrollView>
 
-      {/* Légende + capacité par défaut */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#4ADE80" }} />
-            <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.available") || "Disponible"}</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#2A2F37" }} />
-            <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.unavailable") || "Indispo"}</Text>
+      {/* Fenêtre horaire + capacité */}
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "700", marginBottom: 3 }}>{t("partner.slotStart")}</Text>
+          <TextInput value={start} onChangeText={setStart} placeholder="10:00" placeholderTextColor="#555"
+            style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 13, borderWidth: 1, borderColor: colors.border, textAlign: "center" }} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "700", marginBottom: 3 }}>{t("partner.slotEnd")}</Text>
+          <TextInput value={end} onChangeText={setEnd} placeholder="00:00" placeholderTextColor="#555"
+            style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 13, borderWidth: 1, borderColor: colors.border, textAlign: "center" }} />
+        </View>
+        <View style={{ flex: 1.1 }}>
+          <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "700", marginBottom: 3 }}>{t("partner.slotCapacity")}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" }}>
+            <TouchableOpacity onPress={() => setCapacity((c) => Math.max(1, c - 1))} style={{ backgroundColor: colors.surface, borderRadius: 6, width: 26, height: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ color: colors.primary, fontWeight: "800" }}>−</Text>
+            </TouchableOpacity>
+            <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 14, minWidth: 22, textAlign: "center" }}>{capacity}</Text>
+            <TouchableOpacity onPress={() => setCapacity((c) => c + 1)} style={{ backgroundColor: colors.surface, borderRadius: 6, width: 26, height: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ color: colors.primary, fontWeight: "800" }}>+</Text>
+            </TouchableOpacity>
           </View>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 10, color: colors.muted }}>{t("partner.slotCapacity") || "CAPACITÉ"}</Text>
-          <TouchableOpacity onPress={() => setDefaultCapacity((c) => Math.max(1, c - 1))} style={{ backgroundColor: colors.surface, borderRadius: 6, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.primary, fontWeight: "800" }}>−</Text>
-          </TouchableOpacity>
-          <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 14, minWidth: 22, textAlign: "center" }}>{defaultCapacity}</Text>
-          <TouchableOpacity onPress={() => setDefaultCapacity((c) => c + 1)} style={{ backgroundColor: colors.surface, borderRadius: 6, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.primary, fontWeight: "800" }}>+</Text>
-          </TouchableOpacity>
+      </View>
+
+      {/* Légende */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#4ADE80" }} />
+          <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.available")}</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#2A2F37" }} />
+          <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.unavailable")}</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#EF4444" }} />
+          <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.slotFullLabel")}</Text>
         </View>
       </View>
 
@@ -693,30 +744,31 @@ function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
               ))}
             </View>
 
-            {/* Lignes : une par créneau horaire */}
-            {TIME_SLOTS.map((time) => (
-              <View key={time} style={{ flexDirection: "row", marginBottom: 6, alignItems: "center" }}>
+            {/* Lignes : une par créneau de 30 min */}
+            {times.map((time) => (
+              <View key={time} style={{ flexDirection: "row", marginBottom: 4, alignItems: "center" }}>
                 <View style={{ width: 44 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.foreground }}>{time}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.foreground }}>{time}</Text>
                 </View>
                 {DAYS_ORDER.map((d) => {
-                  const cell = cells[cellKey(d, time)];
-                  const active = !!cell?.active;
-                  const full = cell ? cell.current_bookings >= cell.max_capacity : false;
+                  const key = cellKey(d, time);
+                  const active = isActive(key);
+                  const s = original[key];
+                  const full = s ? s.current_bookings >= s.max_capacity : false;
                   return (
                     <TouchableOpacity
                       key={d}
                       onPress={() => toggleCell(d, time)}
                       activeOpacity={0.7}
                       style={{
-                        width: COL_W - 4, height: 44, marginHorizontal: 2, borderRadius: 8,
+                        width: COL_W - 4, height: 38, marginHorizontal: 2, borderRadius: 7,
                         backgroundColor: active ? (full ? "#EF4444" : "#4ADE80") : "#2A2F37",
                         alignItems: "center", justifyContent: "center",
                       }}
                     >
-                      {cell && (cell.slotId || active) ? (
-                        <Text style={{ fontSize: 10, fontWeight: "800", color: active ? "#0A0E13" : colors.muted }}>
-                          {cell.current_bookings}/{cell.max_capacity}
+                      {active && s ? (
+                        <Text style={{ fontSize: 9, fontWeight: "800", color: "#0A0E13" }}>
+                          {s.current_bookings}/{s.max_capacity}
                         </Text>
                       ) : null}
                     </TouchableOpacity>
@@ -742,7 +794,7 @@ function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
         {saving
           ? <ActivityIndicator color="#0A0E13" />
           : <Text style={{ color: dirty ? "#0A0E13" : colors.muted, fontWeight: "800", fontSize: 15 }}>
-              {dirty ? (t("partner.saveSlots") || "Sauvegarder") : (t("partner.allSaved") || "À jour ✓")}
+              {dirty ? t("partner.saveSlots") : t("partner.allSaved")}
             </Text>}
       </TouchableOpacity>
 

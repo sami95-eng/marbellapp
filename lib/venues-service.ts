@@ -120,14 +120,37 @@ export async function getVenuesByCategory(
   return data ?? [];
 }
 
-/** Liste simplifiée de toutes les venues (sélecteur admin des disponibilités) */
-export async function getAllVenuesBasic(): Promise<{ id: string; name: string; category: string }[]> {
+export interface VenueBasic {
+  id: string;
+  name: string;
+  category: string;
+  slot_start: string;        // "HH:MM"
+  slot_end: string;          // "HH:MM"
+  default_capacity: number;
+}
+
+/** Liste simplifiée de toutes les venues + config créneaux (sélecteur admin) */
+export async function getAllVenuesBasic(): Promise<VenueBasic[]> {
   const { data, error } = await supabase
     .from("venues")
-    .select("id, name, category")
+    .select("id, name, category, slot_start, slot_end, default_capacity")
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).map((v: any) => ({
+    id: v.id, name: v.name, category: v.category,
+    slot_start: v.slot_start ?? "10:00",
+    slot_end: v.slot_end ?? "00:00",
+    default_capacity: v.default_capacity ?? 10,
+  }));
+}
+
+/** Met à jour la fenêtre horaire / capacité par défaut d'une venue. */
+export async function updateVenueSlotConfig(
+  venueId: string,
+  config: { slot_start: string; slot_end: string; default_capacity: number }
+): Promise<void> {
+  const { error } = await supabase.from("venues").update(config).eq("id", venueId);
+  if (error) throw new Error(error.message);
 }
 
 /** Venue par slug */
