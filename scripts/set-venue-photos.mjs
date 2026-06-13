@@ -29,9 +29,10 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
 const TARGETS = [
-  { slug: "nao-marbella",          url: "https://naopoolclub.com/wp-content/uploads/2018/08/NAO_HOME-HOR-2.jpg" },
-  { slug: "trocadero-arena",       url: "https://www.grupotrocadero.com/wp-content/uploads/trocadero-arena-marbella.jpg" },
-  { slug: "trocadero-petit-playa", url: "https://www.grupotrocadero.com/wp-content/uploads/trocadero-petit-playa.jpg" },
+  // Sites Trocadero bloquent le scraping (Elementor lazy-load, pas d'og:image)
+  // et pas de clé Google Places API dispo → fallback Wikimedia Commons (Marbella).
+  { slug: "trocadero-arena",       url: "https://upload.wikimedia.org/wikipedia/commons/5/54/Marbella_Beach%2C_Costa_Del_Sol%2C_Spain_-_Sept_2008.jpg" },
+  { slug: "trocadero-petit-playa", url: "https://upload.wikimedia.org/wikipedia/commons/9/9d/Cabopino_beach%2C_Costa_del_Sol%2C_Spain_2005.jpg" },
 ];
 
 function extFor(url, ct) {
