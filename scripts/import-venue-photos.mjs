@@ -59,31 +59,48 @@ const VENUES = [
   { slug: "mamzel-finca-besaya",   site: "https://mamzelmarbella.com" },
   { slug: "nota-blu-brasserie",    site: "https://notablu.com" },
   { slug: "le-jade-marbella",      site: "https://lejademarbella.com" },
-  { slug: "trocadero-arena",       site: "https://www.grupotrocadero.com/en/trocadero-arena-marbella/" },
+  { slug: "trocadero-arena",       site: "https://www.grupotrocadero.com" },
   { slug: "trocadero-playa",       site: "https://www.grupotrocadero.com" },
-  { slug: "trocadero-petit-playa", site: "https://www.grupotrocadero.com/en/trocadero-petit-playa/" },
+  { slug: "trocadero-petit-playa", site: "https://www.grupotrocadero.com" },
   { slug: "divot-gastro-grill",    site: "https://divot.es" },
   { slug: "lov-marbella",          site: "https://oliviavalere.com" },
   // nao-marbella : site inconnu → on laisse l'image temporaire (non listé ici)
 ];
 
+// Repère les images qui sont des logos / favicons / icônes / vignettes minuscules
+function isLogoish(u) {
+  return /logo|favicon|icon|sprite|placeholder|cropped|[-_](?:16|24|32|48|64|96|100|120|150|160|180|192|200|250|300)x\d+/i.test(u);
+}
+
 // ── Extraction de l'URL d'image depuis le HTML ───────────────────────
+// Collecte tous les candidats (og/twitter, wp-content/uploads, <img>),
+// écarte les logos/favicons, et préfère une vraie photo jpg/webp.
 function extractImageUrl(html, baseUrl) {
-  // 1) og:image (les deux ordres d'attributs)
-  let m =
-    html.match(/<meta[^>]+(?:property|name)=["']og:image(?::url|:secure_url)?["'][^>]*content=["']([^"']+)["']/i) ||
-    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:image(?::url|:secure_url)?["']/i);
-  if (m && m[1]) return new URL(m[1], baseUrl).toString();
+  const candidates = [];
+  let mm;
 
-  // 2) première image /wp-content/uploads/
-  m = html.match(/https?:\/\/[^"')\s]+\/wp-content\/uploads\/[^"')\s]+\.(?:jpe?g|png|webp)/i);
-  if (m) return new URL(m[0], baseUrl).toString();
+  const metaRe = /<meta[^>]+(?:property|name)=["'](?:og:image(?::url|:secure_url)?|twitter:image(?::src)?)["'][^>]*content=["']([^"']+)["']/ig;
+  while ((mm = metaRe.exec(html))) candidates.push(mm[1]);
+  const metaRe2 = /<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)/ig;
+  while ((mm = metaRe2.exec(html))) candidates.push(mm[1]);
 
-  // 3) repli : premier <img src> absolu en jpg/png/webp
-  m = html.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i);
-  if (m && m[1]) return new URL(m[1], baseUrl).toString();
+  const upRe = /https?:\/\/[^"')\s]+\/wp-content\/uploads\/[^"')\s]+\.(?:jpe?g|png|webp)/ig;
+  while ((mm = upRe.exec(html))) candidates.push(mm[0]);
 
-  return null;
+  const imgRe = /<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/ig;
+  while ((mm = imgRe.exec(html))) candidates.push(mm[1]);
+
+  // normalise + dédoublonne
+  const seen = new Set();
+  const norm = [];
+  for (const c of candidates) {
+    let abs; try { abs = new URL(c, baseUrl).toString(); } catch { continue; }
+    if (!seen.has(abs)) { seen.add(abs); norm.push(abs); }
+  }
+
+  const good = norm.filter((u) => !isLogoish(u));
+  const photos = good.filter((u) => /\.(?:jpe?g|webp)(?:\?|$)/i.test(u));
+  return photos[0] || good[0] || norm[0] || null;
 }
 
 function extFor(url, contentType) {
@@ -108,7 +125,7 @@ async function fetchImage(url) {
   if (!res.ok) throw new Error(`image HTTP ${res.status}`);
   const ct = res.headers.get("content-type") || "";
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length < 1000) throw new Error("image trop petite / vide");
+  if (buf.length < 8000) throw new Error("image trop petite / vide (probable logo)");
   return { buf, ct };
 }
 
