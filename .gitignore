@@ -59,6 +59,9 @@ logs
 *.log
 expo-log.txt
 
+# Photos téléchargées par scripts/import-venue-photos.mjs
+scripts/.venue-photos/
+
 # OS
 Thumbs.db
 
