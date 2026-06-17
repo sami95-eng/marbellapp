@@ -10,7 +10,6 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/use-auth";
 import { useBookings } from "@/hooks/use-bookings";
 import { supabase } from "@/lib/supabase";
-import { releaseSlot } from "@/lib/availability-service";
 import { useDemo } from "@/lib/demo-context";
 import { DEMO_BOOKINGS } from "@/constants/demo-data";
 import type { Booking } from "@/lib/bookings-service";
@@ -245,9 +244,8 @@ export default function BookingsScreen() {
     const doCancel = async () => {
       setCancellingId(b.id);
       try {
+        // cancel() (useBookings) libère aussi la place du créneau si nécessaire
         await cancel(b.id);
-        // Libère la place sur le créneau de disponibilité (non bloquant)
-        if (b.slot_id) releaseSlot(b.slot_id).catch((e) => console.warn("[bookings] releaseSlot failed:", e?.message));
         // Email d'annulation au client + admin (non bloquant) — expéditeur Marbell'app
         const userEmail = b.user_email ?? user?.email ?? undefined;
         if (userEmail) {

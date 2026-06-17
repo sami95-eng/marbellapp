@@ -6,6 +6,7 @@ import {
   createBooking,
   cancelBooking,
 } from "@/lib/bookings-service";
+import { releaseSlot } from "@/lib/availability-service";
 
 interface UseBookingsResult {
   bookings: Booking[];
@@ -50,7 +51,15 @@ export function useBookings(userId: string | undefined): UseBookingsResult {
   };
 
   const cancel = async (id: string): Promise<void> => {
+    const target = bookings.find((b) => b.id === id);
     await cancelBooking(id);
+    // Libère la place sur le créneau de disponibilité (non bloquant).
+    // Centralisé ici pour couvrir tous les écrans d'annulation client.
+    if (target?.slot_id) {
+      releaseSlot(target.slot_id).catch((e) =>
+        console.warn("[useBookings] releaseSlot failed:", e?.message)
+      );
+    }
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status: "cancelled" as const } : b))
     );

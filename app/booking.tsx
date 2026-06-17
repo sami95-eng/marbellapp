@@ -14,7 +14,32 @@ import type { VenueTable } from "@/lib/tables-service";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { createBooking } from "@/lib/bookings-service";
-import { getAvailableSlots, bookSlot, type AvailabilitySlot } from "@/lib/availability-service";
+import { getAvailableSlots, bookSlot, releaseSlot, type AvailabilitySlot } from "@/lib/availability-service";
+
+// Le date-picker natif ne supporte pas le web : on ne le charge que sur natif
+// (le require n'est jamais exécuté sur web → aucun crash de bundle).
+let DateTimePicker: any = null;
+if (Platform.OS !== "web") {
+  DateTimePicker = require("@react-native-community/datetimepicker").default;
+}
+
+// ── Helpers de date (YYYY-MM-DD, comparaisons locales) ──────────────
+const toISODate = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+const parseISODate = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y || 1970, (m || 1) - 1, d || 1);
+};
+const formatDisplayDate = (iso: string) =>
+  parseISODate(iso).toLocaleDateString(undefined, {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+  });
+// Comparaison sûre sur des chaînes YYYY-MM-DD (ordre lexicographique = ordre temporel)
+const isPastDate = (iso: string) => iso < toISODate(new Date());
 
 // ── Table selector card ────────────────────────────────────────────
 function TableCard({
@@ -153,7 +178,8 @@ export default function BookingScreen() {
   const [selectedTable, setSelectedTable] = useState<VenueTable | null | undefined>(undefined);
   // undefined = nothing selected yet, null = "no preference"
 
-  const [date, setDate] = useState("2026-06-15");
+  const [date, setDate] = useState(() => toISODate(new Date()));
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [time, setTime] = useState("19:00");
   const [guests, setGuests] = useState("2");
   const [notes, setNotes] = useState("");
@@ -196,6 +222,13 @@ export default function BookingScreen() {
       return;
     }
 
+    // La date ne peut pas être dans le passé
+    if (isPastDate(date)) {
+      const msg = t("booking.dateInPast");
+      if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
+      return;
+    }
+
     // Si l'établissement gère des créneaux, il faut en choisir un disponible
     if (hasSlotSystem && slots.length > 0 && !selectedSlot) {
       const msg = t("booking.selectSlotRequired");
@@ -227,75 +260,38 @@ export default function BookingScreen() {
     const resolvedVenueName = venueNameParam || venueId || "Exclusive Venue";
 
     try {
-      // ── DIAGNOSTIC INSERT ─────────────────────────────────────────
-      console.warn("=== [BOOKING] CONFIRM PRESSED ===");
-
-      const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
-      console.warn("[BOOKING] auth.getUser() id:", authUser?.id ?? "NULL");
-      if (authErr) console.error("[BOOKING] auth error:", authErr.message);
-
+      const { data: { user: authUser } } = await supabase.auth.getUser();
       const userId = authUser?.id ?? user?.id ?? null;
-      console.warn("[BOOKING] userId to use:", userId ?? "NULL — will skip insert");
 
-      if (userId) {
-        const payload = {
-          user_id:             userId,
-          venue_id:            venueUuidParam    || null,
-          venue_name:          resolvedVenueName,
-          venue_slug:          venueId           || null,
-          venue_category:      venueCategoryParam || null,
-          date,
-          time,
-          guests:              parseInt(guests) || 1,
-          table_id:            selectedTable?.id        ?? null,
-          table_name:          selectedTable?.name      ?? null,
-          table_price:         selectedTable?.price_min ?? null,
-          notes:               notes || null,
-          phone_number:        phone.trim(),
-          user_email:          authUser?.email ?? user?.email ?? null,
-          user_name:           user?.name || (authUser?.email ?? user?.email ?? "").split("@")[0] || null,
-          status:              "pending" as const,
-          confirmation_number: confirmNum,
-          slot_id:             selectedSlot?.id ?? null,
-        };
-        console.warn("[BOOKING] payload:", JSON.stringify(payload));
-
-        const { data: insertedRow, error: insertErr } = await supabase
-          .from("bookings")
-          .insert(payload)
-          .select("*")
-          .single();
-
-        console.warn("[BOOKING] insert data:", JSON.stringify(insertedRow));
-        console.warn("[BOOKING] insert error:", JSON.stringify(insertErr));
-
-        if (insertErr) {
-          const msg = `[${insertErr.code}] ${insertErr.message}`;
-          console.error("[BOOKING] INSERT FAILED:", msg);
-          if (Platform.OS === "web") {
-            window.alert(`⚠️ Booking not saved:\n${msg}`);
-          } else {
-            Alert.alert("Booking not saved", msg);
-          }
-        } else if (!insertedRow) {
-          console.error("[BOOKING] INSERT SILENT FAIL — data null, error null (RLS?)");
-          if (Platform.OS === "web") {
-            window.alert("⚠️ Booking not saved — RLS policy blocked the insert.\nVerify the bookings table policies in Supabase.");
-          } else {
-            Alert.alert("Booking not saved", "RLS policy may be blocking the insert.");
-          }
-        } else {
-          console.warn("[BOOKING] INSERT OK — row id:", insertedRow.id);
-        }
-      } else {
-        console.error("[BOOKING] NO USER ID — skipping insert");
-        if (Platform.OS === "web") {
-          window.alert("⚠️ Not logged in — cannot save booking.");
-        } else {
-          Alert.alert("Not logged in", "Please log in first.");
-        }
+      if (!userId) {
+        // Pas de session → on ne peut pas enregistrer ; libère le créneau réservé
+        if (selectedSlot) releaseSlot(selectedSlot.id).catch(() => {});
+        const msg = t("booking.notLoggedIn");
+        if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
+        setIsSubmitting(false);
+        return;
       }
-      // ── END DIAGNOSTIC ────────────────────────────────────────────
+
+      await createBooking({
+        user_id:             userId,
+        venue_id:            venueUuidParam     || null,
+        venue_name:          resolvedVenueName,
+        venue_slug:          venueId            || null,
+        venue_category:      venueCategoryParam || null,
+        date,
+        time,
+        guests:              parseInt(guests) || 1,
+        table_id:            selectedTable?.id        ?? null,
+        table_name:          selectedTable?.name      ?? null,
+        table_price:         selectedTable?.price_min ?? null,
+        notes:               notes || null,
+        phone_number:        phone.trim(),
+        user_email:          authUser?.email ?? user?.email ?? null,
+        user_name:           user?.name || (authUser?.email ?? user?.email ?? "").split("@")[0] || null,
+        status:              "pending",
+        confirmation_number: confirmNum,
+        slot_id:             selectedSlot?.id ?? null,
+      });
 
       // Fire-and-forget email notifications (non-blocking)
       if (user?.email) {
@@ -315,7 +311,7 @@ export default function BookingScreen() {
             userPhone:          phone.trim(),
             confirmationNumber: confirmNum,
           },
-        }).catch((e) => console.warn("[Booking] notification email failed:", e?.message));
+        }).catch((e) => console.warn("[booking] notification email failed:", e?.message));
       }
 
       router.push({
@@ -332,6 +328,12 @@ export default function BookingScreen() {
           confirmationNumber: confirmNum,
         },
       });
+    } catch (e: any) {
+      // L'enregistrement a échoué (erreur réseau / RLS) → libère le créneau réservé
+      if (selectedSlot) releaseSlot(selectedSlot.id).catch(() => {});
+      console.warn("[booking] createBooking failed:", e?.message);
+      const msg = t("booking.saveFailed");
+      if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -432,13 +434,44 @@ export default function BookingScreen() {
         {/* ── Date ────────────────────────────────────────────────── */}
         <View style={cardStyle}>
           <Text style={labelStyle}>{t("booking.date")}</Text>
-          <TextInput
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#555"
-            style={inputStyle}
-          />
+          {Platform.OS === "web" ? (
+            // Sélecteur natif du navigateur (le picker RN ne gère pas le web).
+            // `min` empêche déjà la sélection d'une date passée côté UI.
+            <input
+              type="date"
+              value={date}
+              min={toISODate(new Date())}
+              onChange={(e: any) => setDate(e.target.value)}
+              style={{
+                fontSize: 15,
+                color: "#e8e8e8",
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                colorScheme: "dark",
+                width: "100%",
+              }}
+            />
+          ) : (
+            <>
+              <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+                <Text style={{ fontSize: 15, color: "#e8e8e8" }}>{formatDisplayDate(date)}</Text>
+              </TouchableOpacity>
+              {showDatePicker && DateTimePicker && (
+                <DateTimePicker
+                  value={parseISODate(date)}
+                  mode="date"
+                  display="default"
+                  minimumDate={new Date()}
+                  onChange={(event: any, selected?: Date) => {
+                    setShowDatePicker(false);
+                    if (event?.type === "dismissed") return;
+                    if (selected) setDate(toISODate(selected));
+                  }}
+                />
+              )}
+            </>
+          )}
         </View>
 
         {/* ── Créneaux disponibles (si l'établissement en définit) ── */}
