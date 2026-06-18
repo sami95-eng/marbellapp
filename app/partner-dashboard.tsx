@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ScrollView, Text, View, TouchableOpacity, FlatList, TextInput, Switch, ActivityIndicator, Alert, Platform } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, FlatList, TextInput, Switch, ActivityIndicator, Alert, Platform, Modal } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -14,13 +14,18 @@ import { useVenueTables } from "@/hooks/use-tables";
 import type { VenueTable } from "@/lib/tables-service";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
 import { getManagedBookings, updateBookingStatus, updateBookingSchedule } from "@/lib/bookings-service";
 import { getAllVenuesBasic, updateVenueSlotConfig, type VenueBasic } from "@/lib/venues-service";
 import {
   getVenueSlots, createSlots, toggleSlot, releaseSlot, type AvailabilitySlot,
 } from "@/lib/availability-service";
+import {
+  getAdminClients, getBookingsThisMonthCount, getClientBookings,
+  type AdminClient, type ClientBooking,
+} from "@/lib/clients-service";
 
-type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "stats";
+type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "stats" | "clients";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overview Tab
@@ -1237,6 +1242,299 @@ function TablesTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; i
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Clients Tab (admin only)
+// ─────────────────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 20;
+
+const DEMO_CLIENTS: AdminClient[] = [
+  { id: "c1", name: "Sofia Martín",  email: "sofia@example.com",  phone: "+34 600 111 222", created_at: new Date(Date.now() - 3 * 864e5).toISOString(),  last_booking_at: new Date(Date.now() - 2 * 864e5).toISOString(), total_bookings: 5, favorite_venue: "Ocean Club Marbella", active: true },
+  { id: "c2", name: "Carlos Ruiz",   email: "carlos@example.com", phone: null,               created_at: new Date(Date.now() - 40 * 864e5).toISOString(), last_booking_at: new Date(Date.now() - 12 * 864e5).toISOString(), total_bookings: 3, favorite_venue: "Nikki Beach", active: true },
+  { id: "c3", name: "Laura Torres",  email: "laura@example.com",  phone: "+34 600 333 444", created_at: new Date(Date.now() - 120 * 864e5).toISOString(), last_booking_at: new Date(Date.now() - 90 * 864e5).toISOString(), total_bookings: 8, favorite_venue: "Puente Romano", active: false },
+];
+
+function initials(name?: string | null, email?: string | null): string {
+  const base = (name || email || "?").trim();
+  const parts = base.split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return base.slice(0, 2).toUpperCase();
+}
+function fmtDate(s?: string | null): string {
+  if (!s) return "—";
+  try { return new Date(s).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return "—"; }
+}
+function daysSince(s: string): number { return (Date.now() - new Date(s).getTime()) / 864e5; }
+
+type SortKey = "created" | "last" | "bookings";
+
+function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
+  const { t } = useTranslation();
+  const [clients, setClients] = useState<AdminClient[]>([]);
+  const [bookingsMonth, setBookingsMonth] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [venueFilter, setVenueFilter] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [page, setPage] = useState(0);
+
+  const [selected, setSelected] = useState<AdminClient | null>(null);
+  const [history, setHistory] = useState<ClientBooking[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setError(null);
+      try {
+        if (isDemo) {
+          setClients(DEMO_CLIENTS); setBookingsMonth(11);
+        } else {
+          const [cl, cnt] = await Promise.all([getAdminClients(), getBookingsThisMonthCount()]);
+          if (!cancelled) { setClients(cl); setBookingsMonth(cnt); }
+        }
+      } catch (e: any) { if (!cancelled) setError(e.message ?? "Erreur de chargement"); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [isDemo]);
+
+  // Stats
+  const startMonth = (() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const stats = {
+    total: clients.length,
+    newMonth: clients.filter((c) => new Date(c.created_at).getTime() >= startMonth).length,
+    active: clients.filter((c) => c.active).length,
+    bookingsMonth,
+  };
+
+  // Venues présents (pour le filtre)
+  const venueOptions = Array.from(new Set(clients.map((c) => c.favorite_venue).filter(Boolean))) as string[];
+
+  // Filtrage + tri
+  const filtered = clients
+    .filter((c) => {
+      const q = search.trim().toLowerCase();
+      if (q && !(`${c.name ?? ""} ${c.email ?? ""}`.toLowerCase().includes(q))) return false;
+      if (statusFilter === "active" && !c.active) return false;
+      if (statusFilter === "inactive" && c.active) return false;
+      if (venueFilter && c.favorite_venue !== venueFilter) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortKey === "bookings") return b.total_bookings - a.total_bookings;
+      if (sortKey === "last") return new Date(b.last_booking_at ?? 0).getTime() - new Date(a.last_booking_at ?? 0).getTime();
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  const openClient = async (c: AdminClient) => {
+    setSelected(c); setHistory([]); setHistoryLoading(true);
+    try {
+      if (isDemo) {
+        setHistory([
+          { id: "h1", venue_name: c.favorite_venue ?? "Ocean Club", date: "2026-06-14", time: "22:00", status: "confirmed", created_at: new Date().toISOString() },
+          { id: "h2", venue_name: "Nikki Beach", date: "2026-05-20", time: "14:00", status: "completed", created_at: new Date().toISOString() },
+        ]);
+      } else {
+        setHistory(await getClientBookings(c.id));
+      }
+    } catch { /* ignore */ }
+    finally { setHistoryLoading(false); }
+  };
+
+  const StatCard = ({ label, value, icon }: { label: string; value: string | number; icon: string }) => (
+    <View style={{ width: "47%", backgroundColor: colors.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.border }}>
+      <Text style={{ fontSize: 18 }}>{icon}</Text>
+      <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary, marginTop: 6 }}>{value}</Text>
+      <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{label}</Text>
+    </View>
+  );
+
+  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
+    <TouchableOpacity onPress={() => setSortKey(k)}
+      style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: sortKey === k ? colors.primary : colors.surface, borderWidth: 1, borderColor: sortKey === k ? colors.primary : colors.border }}>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: sortKey === k ? "#0A0E13" : colors.muted }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  if (loading) return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
+  if (error) return (
+    <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
+      <Text style={{ fontSize: 32 }}>⚠️</Text>
+      <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{error}</Text>
+    </View>
+  );
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Stats */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <StatCard icon="👥" label={t("admin.totalClients")}   value={stats.total} />
+        <StatCard icon="🆕" label={t("admin.newThisMonth")}   value={stats.newMonth} />
+        <StatCard icon="⚡" label={t("admin.activeClients")}  value={stats.active} />
+        <StatCard icon="📋" label={t("admin.bookingsThisMonth")} value={stats.bookingsMonth} />
+      </View>
+
+      {/* Recherche */}
+      <TextInput
+        value={search}
+        onChangeText={(v) => { setSearch(v); setPage(0); }}
+        placeholder={t("admin.searchClients")}
+        placeholderTextColor="#555"
+        style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}
+      />
+
+      {/* Filtre statut */}
+      <View style={{ flexDirection: "row", gap: 6, marginBottom: 8 }}>
+        {(["all", "active", "inactive"] as const).map((s) => (
+          <TouchableOpacity key={s} onPress={() => { setStatusFilter(s); setPage(0); }}
+            style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8, backgroundColor: statusFilter === s ? colors.primary : colors.surface, borderWidth: 1, borderColor: statusFilter === s ? colors.primary : colors.border }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: statusFilter === s ? "#0A0E13" : colors.muted }}>
+              {s === "all" ? t("admin.all") : s === "active" ? t("admin.active") : t("admin.inactive")}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Filtre venue */}
+      {venueOptions.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 6 }}>
+          <TouchableOpacity onPress={() => { setVenueFilter(null); setPage(0); }}
+            style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, backgroundColor: !venueFilter ? colors.primary : colors.surface, borderWidth: 1, borderColor: !venueFilter ? colors.primary : colors.border }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: !venueFilter ? "#0A0E13" : colors.muted }}>{t("admin.allVenues")}</Text>
+          </TouchableOpacity>
+          {venueOptions.map((v) => (
+            <TouchableOpacity key={v} onPress={() => { setVenueFilter(v); setPage(0); }}
+              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, backgroundColor: venueFilter === v ? colors.primary : colors.surface, borderWidth: 1, borderColor: venueFilter === v ? colors.primary : colors.border }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: venueFilter === v ? "#0A0E13" : colors.muted }} numberOfLines={1}>{v}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Tri */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14 }}>
+        <Text style={{ fontSize: 10, color: colors.muted }}>{t("admin.sortBy")}</Text>
+        <SortBtn k="created"  label={t("admin.registered")} />
+        <SortBtn k="last"     label={t("admin.lastBooking")} />
+        <SortBtn k="bookings" label={t("admin.bookings")} />
+      </View>
+
+      {/* Liste */}
+      {pageRows.length === 0 ? (
+        <View style={{ alignItems: "center", paddingVertical: 30, gap: 8 }}>
+          <Text style={{ fontSize: 32 }}>👥</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>{t("admin.noClients")}</Text>
+        </View>
+      ) : pageRows.map((c) => (
+        <TouchableOpacity key={c.id} onPress={() => openClient(c)} activeOpacity={0.7}
+          style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.border }}>
+          <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>{initials(c.name, c.email)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground, flexShrink: 1 }} numberOfLines={1}>{c.name ?? "—"}</Text>
+              {daysSince(c.created_at) < 7 && (
+                <View style={{ backgroundColor: "rgba(74,222,128,0.18)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "800", color: "#4ADE80" }}>{t("admin.new")}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ fontSize: 11, color: colors.muted }} numberOfLines={1}>{c.email ?? "—"}</Text>
+            <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }} numberOfLines={1}>
+              📅 {fmtDate(c.created_at)} · 🕐 {fmtDate(c.last_booking_at)} · {c.favorite_venue ?? "—"}
+            </Text>
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <View style={{ backgroundColor: c.active ? "rgba(74,222,128,0.15)" : "rgba(239,68,68,0.12)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: c.active ? "#4ADE80" : "#EF4444" }}>{c.active ? t("admin.active") : t("admin.inactive")}</Text>
+            </View>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: colors.primary }}>{c.total_bookings} 📋</Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+
+      {/* Pagination */}
+      {filtered.length > PAGE_SIZE && (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 10 }}>
+          <TouchableOpacity disabled={safePage === 0} onPress={() => setPage(safePage - 1)} style={{ opacity: safePage === 0 ? 0.4 : 1, padding: 8 }}>
+            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16 }}>←</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 12, color: colors.muted }}>{safePage + 1} / {pageCount}</Text>
+          <TouchableOpacity disabled={safePage >= pageCount - 1} onPress={() => setPage(safePage + 1)} style={{ opacity: safePage >= pageCount - 1 ? 0.4 : 1, padding: 8 }}>
+            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16 }}>→</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Fiche client (modal slide-over) */}
+      <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: "85%", borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{t("admin.clientFile")}</Text>
+              <TouchableOpacity onPress={() => setSelected(null)}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
+            </View>
+            {selected && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 18 }}>{initials(selected.name, selected.email)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{selected.name ?? "—"}</Text>
+                      {daysSince(selected.created_at) < 7 && (
+                        <View style={{ backgroundColor: "rgba(74,222,128,0.18)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: "800", color: "#4ADE80" }}>{t("admin.new")}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 13, color: colors.muted }}>{selected.email ?? "—"}</Text>
+                  </View>
+                </View>
+
+                <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: colors.border, gap: 6 }}>
+                  {selected.phone ? <Text style={{ fontSize: 13, color: colors.foreground }}>📞 {selected.phone}</Text> : null}
+                  <Text style={{ fontSize: 13, color: colors.foreground }}>📅 {t("admin.registered")} : {fmtDate(selected.created_at)}</Text>
+                  <Text style={{ fontSize: 13, color: colors.foreground }}>🪑 {t("admin.totalBookings")} : {selected.total_bookings}</Text>
+                  {selected.favorite_venue ? <Text style={{ fontSize: 13, color: colors.foreground }}>📍 {t("admin.favoriteVenue")} : {selected.favorite_venue}</Text> : null}
+                </View>
+
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground, marginBottom: 10 }}>{t("admin.history")}</Text>
+                {historyLoading ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : history.length === 0 ? (
+                  <Text style={{ fontSize: 12, color: colors.muted }}>{t("admin.noHistory")}</Text>
+                ) : history.map((h) => (
+                  <View key={h.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.surface, borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: colors.border }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{h.venue_name}</Text>
+                      <Text style={{ fontSize: 11, color: colors.muted }}>📅 {h.date} · 🕐 {h.time}</Text>
+                    </View>
+                    <View style={{ backgroundColor: "rgba(212,175,55,0.12)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: colors.primary }}>{h.status}</Text>
+                    </View>
+                  </View>
+                ))}
+                <View style={{ height: 30 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PartnerDashboardScreen() {
@@ -1244,7 +1542,9 @@ export default function PartnerDashboardScreen() {
   const { isDemoMode } = useDemo();
   const router = useRouter();
   const colors = useColors();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { profile } = useProfile(isDemoMode ? undefined : user?.id);
+  const isAdmin = isDemoMode || profile?.role === "admin";
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -1254,6 +1554,8 @@ export default function PartnerDashboardScreen() {
     { id: "tables",       label: t("partner.tabTables"),       icon: "🪑" },
     { id: "offers",       label: t("partner.tabOffers"),       icon: "👑" },
     { id: "stats",        label: t("partner.tabStats"),        icon: "📈" },
+    // Onglet "Clients" réservé aux admins
+    ...(isAdmin ? [{ id: "clients" as Tab, label: t("admin.clients"), icon: "👥" }] : []),
   ];
 
   const partnerName = isDemoMode ? DEMO_PARTNER.name : "My Venue";
@@ -1319,15 +1621,19 @@ export default function PartnerDashboardScreen() {
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, gap: 6 }}>
+        {/* Tabs (scrollable horizontalement — jusqu'à 7 onglets) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, gap: 6 }}
+        >
           {TABS.map((tab) => (
             <TouchableOpacity
               key={tab.id}
               onPress={() => setActiveTab(tab.id)}
               activeOpacity={0.7}
               style={{
-                flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 10,
+                width: 70, alignItems: "center", paddingVertical: 9, borderRadius: 10,
                 backgroundColor: activeTab === tab.id ? colors.primary : colors.surface,
                 borderWidth: 1,
                 borderColor: activeTab === tab.id ? colors.primary : colors.border,
@@ -1340,7 +1646,7 @@ export default function PartnerDashboardScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         {/* Content */}
         <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12 }}>
@@ -1350,6 +1656,7 @@ export default function PartnerDashboardScreen() {
           {activeTab === "tables"       && <TablesTab       colors={colors} isDemo={isDemoMode} />}
           {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} />}
           {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} />}
+          {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
         </View>
       </View>
     </ScreenContainer>
