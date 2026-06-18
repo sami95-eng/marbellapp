@@ -45,6 +45,53 @@ async function insertNotification(
   if (error) throw new Error(error.message);
 }
 
+// ── Push notifications Expo ────────────────────────────────────────
+function isExpoPushToken(t: unknown): t is string {
+  return typeof t === "string" &&
+    (t.startsWith("ExponentPushToken[") || t.startsWith("ExpoPushToken["));
+}
+
+/** push_token du profil d'un utilisateur (ou null si absent/invalide). */
+async function getPushToken(userId?: string): Promise<string | null> {
+  if (!admin || !userId) return null;
+  const { data } = await admin
+    .from("profiles").select("push_token").eq("id", userId).maybeSingle();
+  const tok = (data as { push_token?: string } | null)?.push_token;
+  return isExpoPushToken(tok) ? tok : null;
+}
+
+/** push_tokens des comptes admin/partner (alertes "nouvelle demande"). */
+async function getAdminPushTokens(): Promise<string[]> {
+  if (!admin) return [];
+  const { data } = await admin
+    .from("profiles").select("push_token")
+    .in("role", ["admin", "partner"])
+    .not("push_token", "is", null);
+  return ((data ?? []) as { push_token?: string }[])
+    .map((r) => r.push_token)
+    .filter(isExpoPushToken);
+}
+
+/** Envoie une push notification à une liste de tokens via l'API Expo. */
+async function sendExpoPush(
+  tokens: string[],
+  title: string,
+  body: string,
+  data: Record<string, unknown> = {},
+): Promise<void> {
+  const messages = tokens.filter(isExpoPushToken).map((to) => ({
+    to, sound: "default", title, body, data,
+  }));
+  if (messages.length === 0) return;
+  const r = await fetch("https://exp.host/--/api/v2/push/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(messages),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+  });
+  if (!r.ok) throw new Error(`Expo push ${r.status}: ${await r.text()}`);
+}
+
 const cors = {
   "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -520,6 +567,10 @@ serve(async (req: Request) => {
         { label: "user_email",   promise: send(d.userEmail, subject, html) },
         { label: "admin_email",  promise: send(ADMIN_EMAIL, adminSubject, adminStatusHtml(d, adminMeta.title, adminMeta.accent)) },
         { label: "notification", promise: insertNotification(d.userId, notif.kind, notif.title, notif.message) },
+        { label: "push_user",    promise: (async () => {
+            const tok = await getPushToken(d.userId);
+            if (tok) await sendExpoPush([tok], notif.title, notif.message, { screen: "/my-reservations" });
+          })() },
       ];
 
       const settled = await Promise.allSettled(tasks.map((tk) => tk.promise));
@@ -592,6 +643,34 @@ serve(async (req: Request) => {
         `🆕 Nouvelle réservation reçue — ${d.venueName} · ${d.date} · ${d.guests} guests`,
         adminRecapHtml(d)
       ),
+    });
+
+    // 4 — Push au client (sa demande est bien reçue)
+    tasks.push({
+      label: "push_user",
+      promise: (async () => {
+        const tok = await getPushToken(d.userId);
+        if (tok) await sendExpoPush(
+          [tok],
+          "Demande de réservation reçue 📩",
+          `Votre demande chez ${d.venueName} est bien reçue. Réponse sous 2h.`,
+          { screen: "/my-reservations" },
+        );
+      })(),
+    });
+
+    // 5 — Push aux admins/partenaires (nouvelle demande à traiter)
+    tasks.push({
+      label: "push_admin",
+      promise: (async () => {
+        const toks = await getAdminPushTokens();
+        if (toks.length) await sendExpoPush(
+          toks,
+          "Nouvelle demande de réservation 📋",
+          `${d.venueName} · ${d.date} · ${d.guests} couvert(s)`,
+          { screen: "/partner-dashboard" },
+        );
+      })(),
     });
 
     const settled = await Promise.allSettled(tasks.map((t) => t.promise));

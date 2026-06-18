@@ -27,6 +27,7 @@ import { NotificationsProvider } from "@/lib/notifications-context";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { DemoProvider, useDemo } from "@/lib/demo-context";
 import { consumePartnerLoginIntent } from "@/lib/login-intent";
+import { registerForPushNotifications, setupNotificationHandlers } from "@/lib/push-service";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -179,6 +180,17 @@ function RootLayoutInner() {
   useEffect(() => {
     initManusRuntime();
     loadSavedLanguage(); // restore persisted language preference
+  }, []);
+
+  // Push notifications : handlers + enregistrement du token (une seule fois).
+  // Pas de push sur le web ; registerForPushNotifications gère lui-même les
+  // autres cas (permission refusée, simulateur, pas de session…).
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    setupNotificationHandlers();
+    registerForPushNotifications().then((r) => {
+      if (r.status !== "ok") console.log("[push] registration:", r.status, "—", r.reason);
+    });
   }, []);
 
   const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {

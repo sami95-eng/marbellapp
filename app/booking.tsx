@@ -297,6 +297,7 @@ export default function BookingScreen() {
       if (user?.email) {
         supabase.functions.invoke("booking-notification", {
           body: {
+            userId,
             userEmail:          user.email,
             userName:           user.name || user.email.split("@")[0],
             venueName:          resolvedVenueName,
