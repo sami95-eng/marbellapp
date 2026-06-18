@@ -144,6 +144,32 @@ export async function getAllVenuesBasic(): Promise<VenueBasic[]> {
   }));
 }
 
+/**
+ * Venues possédées par un partenaire (owner_id = utilisateur connecté).
+ * Remplace getAllVenuesBasic pour scoper le dashboard partenaire.
+ */
+export async function getManagedVenues(userId: string): Promise<VenueBasic[]> {
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("venues")
+    .select("id, name, category, slot_start, slot_end, default_capacity")
+    .eq("owner_id", userId)
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((v: any) => ({
+    id: v.id, name: v.name, category: v.category,
+    slot_start: v.slot_start ?? "10:00",
+    slot_end: v.slot_end ?? "00:00",
+    default_capacity: v.default_capacity ?? 10,
+  }));
+}
+
+/** Première venue possédée par le partenaire (ou null). */
+export async function getManagedVenue(userId: string): Promise<VenueBasic | null> {
+  const venues = await getManagedVenues(userId);
+  return venues[0] ?? null;
+}
+
 /** Met à jour la fenêtre horaire / capacité par défaut d'une venue. */
 export async function updateVenueSlotConfig(
   venueId: string,

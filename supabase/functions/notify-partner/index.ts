@@ -9,6 +9,14 @@ const ADMIN_EMAIL    = Deno.env.get("ADMIN_EMAIL") ?? "team@marbellapp.com";
 // Use your verified Resend domain; for testing use "onboarding@resend.dev"
 const FROM_EMAIL     = Deno.env.get("FROM_EMAIL") ?? "onboarding@resend.dev";
 
+// Lien direct vers la table des candidatures dans le dashboard Supabase.
+// Le ref projet est dérivé de SUPABASE_URL (injecté automatiquement).
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const PROJECT_REF  = SUPABASE_URL.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? "";
+const APPLICATIONS_LINK = PROJECT_REF
+  ? `https://supabase.com/dashboard/project/${PROJECT_REF}/editor`
+  : "https://supabase.com/dashboard";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -72,9 +80,20 @@ function adminEmailHTML(data: Record<string, string>) {
     </table>
   </div>
 
-  <div style="background:#111120;border:1px solid rgba(212,175,55,0.25);border-radius:16px;padding:24px;margin-bottom:28px">
+  <div style="background:#111120;border:1px solid rgba(212,175,55,0.25);border-radius:16px;padding:24px;margin-bottom:20px">
     <h2 style="color:#D4AF37;font-size:18px;margin:0 0 12px 0">🎯 Requested Offers</h2>
     <p style="color:#e8e8e8;font-size:14px;margin:0">${(data.offerTypes ?? "").split(",").join(" · ")}</p>
+  </div>
+
+  <div style="text-align:center;margin-bottom:28px">
+    <a href="${APPLICATIONS_LINK}"
+       style="display:inline-block;background:#D4AF37;color:#0A0E13;text-decoration:none;
+              padding:14px 32px;border-radius:50px;font-weight:700;font-size:15px">
+      📋 Voir la candidature (Supabase)
+    </a>
+    <p style="color:#555;font-size:10px;margin:10px 0 0">
+      Table <strong>partner_applications</strong> · statut « pending »
+    </p>
   </div>
 
   <p style="color:#555;font-size:12px;text-align:center">

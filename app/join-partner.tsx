@@ -56,7 +56,22 @@ export default function JoinPartnerScreen() {
     try {
       setIsLoading(true);
 
-      // Appel Edge Function Supabase pour envoyer les emails
+      // 1) Persiste la candidature en base (source de vérité, retrouvable
+      //    dans le dashboard admin). Non bloquant pour l'UX.
+      const { error: appError } = await supabase.from("partner_applications").insert({
+        venue_name:   venueName,
+        venue_type:   venueType,
+        instagram,
+        contact_name: contactName,
+        email:        contactEmail,
+        phone:        contactPhone || null,
+        offers:       selectedOffers.join(", "),
+      });
+      if (appError) {
+        console.warn("[join-partner] application insert failed:", appError.message);
+      }
+
+      // 2) Notifie l'admin + le candidat par email (Edge Function Resend).
       const { error: fnError } = await supabase.functions.invoke("notify-partner", {
         body: {
           venueName,

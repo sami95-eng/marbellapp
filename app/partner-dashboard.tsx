@@ -10,13 +10,19 @@ import {
   DEMO_PARTNER, DEMO_RESERVATIONS, DEMO_VIP_OFFERS,
   DEMO_METRICS, DEMO_ACTIVITY, DEMO_MONTHLY, DEMO_TOP_OFFERS, DEMO_TABLES,
 } from "@/constants/demo-data";
-import { useVenueTables } from "@/hooks/use-tables";
 import type { VenueTable } from "@/lib/tables-service";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { getManagedBookings, updateBookingStatus, updateBookingSchedule } from "@/lib/bookings-service";
-import { getAllVenuesBasic, updateVenueSlotConfig, type VenueBasic } from "@/lib/venues-service";
+import { getAllVenuesBasic, getManagedVenues, updateVenueSlotConfig, type VenueBasic } from "@/lib/venues-service";
+import {
+  getVenueTablesByUUID, createVenueTable, toggleTableActive, deleteVenueTable,
+} from "@/lib/tables-service";
+import {
+  getVenueOffers, createVenueOffer, toggleVenueOffer, deleteVenueOffer,
+  type VipOffer, type OfferType,
+} from "@/lib/offers-service";
 import {
   getVenueSlots, createSlots, toggleSlot, releaseSlot, type AvailabilitySlot,
 } from "@/lib/availability-service";
@@ -551,7 +557,7 @@ const DEMO_SLOTS: AvailabilitySlot[] = [
   { id: "ds3", venue_id: "demo", day_of_week: 6, time: "22:30", max_capacity: 16, current_bookings: 4, is_active: true, created_at: "" },
 ];
 
-function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
+function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typeof useColors>; isDemo: boolean; isAdmin: boolean; userId?: string }) {
   const { t } = useTranslation();
   const [venues, setVenues]   = useState<VenueBasic[]>([]);
   const [venueId, setVenueId] = useState<string | null>(null);
@@ -576,14 +582,15 @@ function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
     (async () => {
       try {
         if (isDemo) { setVenues([DEMO_VENUE]); setVenueId(DEMO_VENUE.id); return; }
-        const vs = await getAllVenuesBasic();
+        // Admin → toutes les venues ; partenaire → uniquement les siennes (owner_id).
+        const vs = isAdmin ? await getAllVenuesBasic() : await getManagedVenues(userId ?? "");
         if (cancelled) return;
         setVenues(vs);
         setVenueId((prev) => prev ?? vs[0]?.id ?? null);
       } catch (e: any) { notify(e.message ?? "Erreur de chargement des établissements"); }
     })();
     return () => { cancelled = true; };
-  }, [isDemo]);
+  }, [isDemo, isAdmin, userId]);
 
   // (Re)charge créneaux + config quand la venue change
   useEffect(() => {
@@ -815,62 +822,254 @@ function AvailabilityTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
 // ─────────────────────────────────────────────────────────────────────────────
 // Offers Tab
 // ─────────────────────────────────────────────────────────────────────────────
-function OffersTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
-  const { t } = useTranslation();
-  const typeIcon: Record<string, string> = { table: "🪑", bed: "🛏️", bottle: "🍾" };
+const OFFER_TYPE_ICONS: Record<OfferType, string> = {
+  table: "🪑", bed: "🛏️", bottle: "🍾", discount: "🏷️", experience: "💎",
+};
+const OFFER_TYPES: OfferType[] = ["table", "bed", "bottle", "discount", "experience"];
+const EMPTY_OFFER = { title: "", type: "table" as OfferType, original_price: "", vip_price: "", spots_total: "10" };
 
-  const offers = isDemo ? DEMO_VIP_OFFERS : DEMO_VIP_OFFERS.slice(0, 1);
+// Map les offres démo (clés legacy) vers la forme VipOffer pour un rendu unifié.
+function demoToOffers(): VipOffer[] {
+  return (DEMO_VIP_OFFERS as any[]).map((o) => ({
+    id: o.id, venue_id: "demo", title: o.title, type: o.type as OfferType,
+    description: null, original_price: o.originalPrice ?? null, vip_price: o.vipPrice ?? null,
+    capacity: 2, spots_total: o.spotsLeft ?? 0, spots_remaining: o.spotsLeft ?? 0,
+    available_date: null, available_time: null, instagram_required: true, instagram_handle: null,
+    is_active: o.active ?? true, created_at: new Date().toISOString(),
+  }));
+}
+
+function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typeof useColors>; isDemo: boolean; isAdmin: boolean; userId?: string }) {
+  const { t } = useTranslation();
+
+  const [venues, setVenues] = useState<VenueBasic[]>([]);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [offers, setOffers] = useState<VipOffer[]>([]);
+  const [loading, setLoading] = useState(!isDemo);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_OFFER });
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  // Venue(s) gérée(s) : admin → toutes, partenaire → les siennes.
+  useEffect(() => {
+    if (isDemo) { setSelectedVenueId("demo"); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const vs = isAdmin ? await getAllVenuesBasic() : await getManagedVenues(userId ?? "");
+        if (cancelled) return;
+        setVenues(vs);
+        setSelectedVenueId((prev) => prev ?? vs[0]?.id ?? null);
+        if (vs.length === 0) setLoading(false);
+      } catch (e: any) { notify(e.message ?? "Erreur de chargement"); }
+    })();
+    return () => { cancelled = true; };
+  }, [isDemo, isAdmin, userId]);
+
+  // Offres de la venue sélectionnée.
+  useEffect(() => {
+    if (isDemo) { setOffers(demoToOffers()); setLoading(false); return; }
+    if (!selectedVenueId) { setOffers([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    getVenueOffers(selectedVenueId)
+      .then((rows) => { if (!cancelled) setOffers(rows); })
+      .catch((e) => { if (!cancelled) notify(e.message ?? "Erreur de chargement des offres"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isDemo, selectedVenueId]);
+
+  const handleToggle = async (id: string, active: boolean) => {
+    setOffers((prev) => prev.map((o) => o.id === id ? { ...o, is_active: active } : o));
+    if (isDemo) return;
+    try { await toggleVenueOffer(id, active); }
+    catch (e: any) {
+      setOffers((prev) => prev.map((o) => o.id === id ? { ...o, is_active: !active } : o));
+      notify(e.message ?? "Échec de la mise à jour");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const snapshot = offers;
+    setOffers((p) => p.filter((o) => o.id !== id));
+    if (isDemo) return;
+    try { await deleteVenueOffer(id); }
+    catch (e: any) { setOffers(snapshot); notify(e.message ?? "Échec de la suppression"); }
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    try {
+      const payload = {
+        title: form.title.trim(),
+        type: form.type,
+        original_price: form.original_price ? parseFloat(form.original_price) : null,
+        vip_price: form.vip_price ? parseFloat(form.vip_price) : null,
+        spots_total: parseInt(form.spots_total) || 10,
+      };
+      if (isDemo) {
+        const spots = payload.spots_total;
+        setOffers((prev) => [{
+          id: `do-${Date.now()}`, venue_id: "demo", title: payload.title, type: payload.type,
+          description: null, original_price: payload.original_price, vip_price: payload.vip_price,
+          capacity: 2, spots_total: spots, spots_remaining: spots,
+          available_date: null, available_time: null, instagram_required: true, instagram_handle: null,
+          is_active: true, created_at: new Date().toISOString(),
+        }, ...prev]);
+      } else {
+        if (!selectedVenueId) { notify("Aucune venue sélectionnée."); return; }
+        const created = await createVenueOffer(selectedVenueId, payload);
+        setOffers((prev) => [created, ...prev]);
+      }
+      setForm({ ...EMPTY_OFFER });
+      setShowForm(false);
+    } catch (e: any) {
+      notify(e.message ?? "Échec de l'enregistrement de l'offre");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <FlatList
-      data={offers}
-      keyExtractor={(item) => item.id}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 40 }}
-      ListHeaderComponent={
-        <TouchableOpacity style={{
-          backgroundColor: colors.primary, borderRadius: 12, padding: 14,
-          alignItems: "center", marginBottom: 16, flexDirection: "row",
-          justifyContent: "center", gap: 8,
-        }}>
-          <Text style={{ fontSize: 16 }}>+</Text>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "#0A0E13" }}>
-            {t("partner.createOffer")}
-          </Text>
-        </TouchableOpacity>
-      }
-      renderItem={({ item }) => (
-        <View style={{
-          backgroundColor: colors.surface, borderRadius: 14, padding: 16, marginBottom: 10,
-          borderWidth: 1,
-          borderColor: item.active ? colors.border : "rgba(239,68,68,0.2)",
-          opacity: item.active ? 1 : 0.6,
-        }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Text style={{ fontSize: 24 }}>{typeIcon[item.type] ?? "🎫"}</Text>
-              <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{item.title}</Text>
-                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>{item.type}</Text>
-              </View>
-            </View>
-            <View style={{
-              backgroundColor: item.active ? "rgba(74,222,128,0.15)" : "rgba(239,68,68,0.15)",
-              paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-            }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: item.active ? "#4ADE80" : "#EF4444" }}>
-                {item.active ? t("partner.active") : t("partner.inactive")}
-              </Text>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Sélecteur de venue (si plusieurs) */}
+      {!isDemo && venues.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8 }}>
+          {venues.map((v) => {
+            const sel = v.id === selectedVenueId;
+            return (
+              <TouchableOpacity key={v.id} onPress={() => setSelectedVenueId(v.id)} activeOpacity={0.8}
+                style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Bouton Ajouter / Annuler */}
+      <TouchableOpacity
+        onPress={() => setShowForm((s) => !s)}
+        disabled={!isDemo && venues.length === 0}
+        style={{
+          backgroundColor: showForm ? colors.surface : colors.primary, borderRadius: 12, padding: 14,
+          alignItems: "center", marginBottom: 16, flexDirection: "row", justifyContent: "center", gap: 8,
+          borderWidth: showForm ? 1 : 0, borderColor: colors.border, opacity: (!isDemo && venues.length === 0) ? 0.5 : 1,
+        }}
+      >
+        <Text style={{ fontSize: 16, color: showForm ? colors.muted : "#0A0E13" }}>{showForm ? "✕" : "+"}</Text>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: showForm ? colors.muted : "#0A0E13" }}>
+          {showForm ? t("common.cancel") : t("partner.createOffer")}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Formulaire de création */}
+      {showForm && (
+        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)", gap: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primary }}>👑 Nouvelle offre</Text>
+
+          <View>
+            <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>TITRE *</Text>
+            <TextInput value={form.title} onChangeText={(v) => setForm((p) => ({ ...p, title: v }))}
+              placeholder="ex. Table VIP + bouteille" placeholderTextColor="#444"
+              style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+          </View>
+
+          <View>
+            <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>TYPE</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {OFFER_TYPES.map((ty) => {
+                const sel = form.type === ty;
+                return (
+                  <TouchableOpacity key={ty} onPress={() => setForm((p) => ({ ...p, type: ty }))}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: sel ? colors.primary : colors.background, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
+                    <Text style={{ fontSize: 14 }}>{OFFER_TYPE_ICONS[ty]}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: sel ? "#0A0E13" : colors.muted }}>{ty}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
-          <View style={{ flexDirection: "row", marginTop: 10, gap: 16, alignItems: "center" }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary }}>€{item.vipPrice}</Text>
-            <Text style={{ fontSize: 11, color: "#888", textDecorationLine: "line-through" }}>€{item.originalPrice}</Text>
-            <Text style={{ fontSize: 12, color: colors.muted }}>{item.spotsLeft} {t("partner.spotsLeft")}</Text>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>PRIX NORMAL (€)</Text>
+              <TextInput value={form.original_price} onChangeText={(v) => setForm((p) => ({ ...p, original_price: v }))}
+                keyboardType="numeric" placeholder="500" placeholderTextColor="#444"
+                style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>PRIX VIP (€)</Text>
+              <TextInput value={form.vip_price} onChangeText={(v) => setForm((p) => ({ ...p, vip_price: v }))}
+                keyboardType="numeric" placeholder="350" placeholderTextColor="#444"
+                style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+            </View>
+            <View style={{ width: 80 }}>
+              <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>PLACES</Text>
+              <TextInput value={form.spots_total} onChangeText={(v) => setForm((p) => ({ ...p, spots_total: v }))}
+                keyboardType="numeric" placeholder="10" placeholderTextColor="#444"
+                style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+            </View>
           </View>
+
+          <TouchableOpacity onPress={handleSave} disabled={saving || !form.title.trim()}
+            style={{ backgroundColor: form.title.trim() ? colors.primary : "#333", borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 4 }}>
+            {saving ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>Enregistrer l'offre</Text>}
+          </TouchableOpacity>
         </View>
       )}
-    />
+
+      {/* Loading */}
+      {loading && !isDemo && (
+        <View style={{ alignItems: "center", paddingVertical: 40 }}><ActivityIndicator color={colors.primary} /></View>
+      )}
+
+      {/* Aucune venue rattachée */}
+      {!isDemo && !loading && venues.length === 0 && (
+        <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
+          <Text style={{ fontSize: 32 }}>🏢</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>Aucun établissement rattaché à ce compte.</Text>
+        </View>
+      )}
+
+      {/* Liste des offres */}
+      {!loading && venues.length > 0 || isDemo ? (
+        offers.length === 0 && !loading ? (
+          <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
+            <Text style={{ fontSize: 32 }}>👑</Text>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>Aucune offre pour le moment</Text>
+          </View>
+        ) : offers.map((item) => (
+          <View key={item.id} style={{
+            backgroundColor: colors.surface, borderRadius: 14, padding: 16, marginBottom: 10,
+            borderWidth: 1, borderColor: item.is_active ? colors.border : "rgba(239,68,68,0.2)", opacity: item.is_active ? 1 : 0.6,
+          }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                <Text style={{ fontSize: 24 }}>{OFFER_TYPE_ICONS[item.type] ?? "🎫"}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }} numberOfLines={1}>{item.title}</Text>
+                  <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>{item.type}</Text>
+                </View>
+              </View>
+              <Switch value={item.is_active} onValueChange={(v) => handleToggle(item.id, v)}
+                trackColor={{ false: "#3A3A3A", true: "#D4AF37" }} style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} />
+              <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 4, marginLeft: 4 }}>
+                <Text style={{ fontSize: 14, color: "#EF4444" }}>🗑</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: "row", marginTop: 10, gap: 16, alignItems: "center" }}>
+              {item.vip_price != null && <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary }}>€{Number(item.vip_price).toLocaleString()}</Text>}
+              {item.original_price != null && <Text style={{ fontSize: 11, color: "#888", textDecorationLine: "line-through" }}>€{Number(item.original_price).toLocaleString()}</Text>}
+              <Text style={{ fontSize: 12, color: colors.muted }}>{item.spots_remaining}/{item.spots_total} {t("partner.spotsLeft")}</Text>
+            </View>
+          </View>
+        ))
+      ) : null}
+    </ScrollView>
   );
 }
 
@@ -940,33 +1139,63 @@ const EMPTY_FORM = {
   photo_url: "" as string | null, is_active: true, is_vip: false, sort_order: 99,
 };
 
-function TablesTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
-  const { data: supabaseTables, loading, toggle, create, remove } = useVenueTables(
-    isDemo ? "" : DEMO_PARTNER.slug
-  );
-  const [localDemoTables, setLocalDemoTables] = useState<VenueTable[]>(
-    DEMO_TABLES as VenueTable[]
-  );
-  const tables = isDemo ? localDemoTables : supabaseTables;
+function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typeof useColors>; isDemo: boolean; isAdmin: boolean; userId?: string }) {
+  const [venues, setVenues] = useState<VenueBasic[]>([]);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [tables, setTables] = useState<VenueTable[]>([]);
+  const [loading, setLoading] = useState(!isDemo);
 
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  // Venue(s) gérée(s) : admin → toutes, partenaire → les siennes (owner_id).
+  useEffect(() => {
+    if (isDemo) { setSelectedVenueId("demo"); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const vs = isAdmin ? await getAllVenuesBasic() : await getManagedVenues(userId ?? "");
+        if (cancelled) return;
+        setVenues(vs);
+        setSelectedVenueId((prev) => prev ?? vs[0]?.id ?? null);
+        if (vs.length === 0) setLoading(false);
+      } catch (e: any) { notify(e.message ?? "Erreur de chargement"); }
+    })();
+    return () => { cancelled = true; };
+  }, [isDemo, isAdmin, userId]);
+
+  // Tables de la venue sélectionnée (vraie venue UUID, plus de stub).
+  useEffect(() => {
+    if (isDemo) { setTables(DEMO_TABLES as VenueTable[]); setLoading(false); return; }
+    if (!selectedVenueId) { setTables([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    getVenueTablesByUUID(selectedVenueId)
+      .then((rows) => { if (!cancelled) setTables(rows); })
+      .catch((e) => { if (!cancelled) notify(e.message ?? "Erreur de chargement des tables"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isDemo, selectedVenueId]);
+
   const handleToggle = async (id: string, active: boolean) => {
-    if (isDemo) {
-      setLocalDemoTables((prev) => prev.map((t) => t.id === id ? { ...t, is_active: active } : t));
-      return;
+    setTables((prev) => prev.map((t) => t.id === id ? { ...t, is_active: active } : t)); // optimiste
+    if (isDemo) return;
+    try { await toggleTableActive(id, active); }
+    catch (e: any) {
+      setTables((prev) => prev.map((t) => t.id === id ? { ...t, is_active: !active } : t)); // rollback
+      notify(e.message ?? "Échec de la mise à jour");
     }
-    await toggle(id, active);
   };
 
   const handleDelete = async (id: string) => {
-    if (isDemo) {
-      setLocalDemoTables((prev) => prev.filter((t) => t.id !== id));
-      return;
-    }
-    await remove(id);
+    const snapshot = tables;
+    setTables((p) => p.filter((t) => t.id !== id)); // optimiste
+    if (isDemo) return;
+    try { await deleteVenueTable(id); }
+    catch (e: any) { setTables(snapshot); notify(e.message ?? "Échec de la suppression"); }
   };
 
   const handleSave = async () => {
@@ -986,16 +1215,30 @@ function TablesTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; i
           photo_url: form.photo_url || null,
           is_active: form.is_active,
           is_vip: form.is_vip,
-          sort_order: localDemoTables.length + 1,
+          sort_order: tables.length + 1,
           created_at: new Date().toISOString(),
         };
-        setLocalDemoTables((prev) => [...prev, newTable]);
+        setTables((prev) => [...prev, newTable]);
       } else {
-        // In production, we'd need the real venue UUID — for now use demo slug
-        // await create(REAL_VENUE_UUID, form);
+        if (!selectedVenueId) { notify("Aucune venue sélectionnée."); return; }
+        const created = await createVenueTable(selectedVenueId, {
+          name: form.name,
+          description: form.description || null,
+          capacity_min: form.capacity_min,
+          capacity_max: form.capacity_max,
+          price_min: form.price_min,
+          price_max: form.price_max,
+          photo_url: form.photo_url || null,
+          is_active: form.is_active,
+          is_vip: form.is_vip,
+          sort_order: tables.length + 1,
+        });
+        setTables((prev) => [...prev, created].sort((a, b) => a.sort_order - b.sort_order));
       }
       setForm({ ...EMPTY_FORM });
       setShowForm(false);
+    } catch (e: any) {
+      notify(e.message ?? "Échec de l'enregistrement de la table");
     } finally {
       setSaving(false);
     }
@@ -1003,6 +1246,31 @@ function TablesTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; i
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Sélecteur de venue (si le compte en gère plusieurs) */}
+      {!isDemo && venues.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8 }}>
+          {venues.map((v) => {
+            const sel = v.id === selectedVenueId;
+            return (
+              <TouchableOpacity key={v.id} onPress={() => setSelectedVenueId(v.id)} activeOpacity={0.8}
+                style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Aucune venue rattachée */}
+      {!isDemo && !loading && venues.length === 0 && (
+        <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
+          <Text style={{ fontSize: 32 }}>🏢</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>
+            Aucun établissement rattaché à ce compte.
+          </Text>
+        </View>
+      )}
+
       {/* Add button */}
       <TouchableOpacity
         onPress={() => setShowForm(!showForm)}
@@ -1652,9 +1920,9 @@ export default function PartnerDashboardScreen() {
         <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12 }}>
           {activeTab === "overview"     && <OverviewTab     colors={colors} isDemo={isDemoMode} />}
           {activeTab === "reservations" && <ReservationsTab colors={colors} isDemo={isDemoMode} />}
-          {activeTab === "availability" && <AvailabilityTab colors={colors} isDemo={isDemoMode} />}
-          {activeTab === "tables"       && <TablesTab       colors={colors} isDemo={isDemoMode} />}
-          {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} />}
+          {activeTab === "availability" && <AvailabilityTab colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
+          {activeTab === "tables"       && <TablesTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
+          {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
         </View>
