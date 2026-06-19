@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ScrollView, Text, View, TouchableOpacity,
-  FlatList, ActivityIndicator, Alert, Platform,
+  FlatList, ActivityIndicator, Alert, Platform, Modal, TextInput,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { useDemo } from "@/lib/demo-context";
 import { DEMO_BOOKINGS } from "@/constants/demo-data";
 import type { Booking } from "@/lib/bookings-service";
+import { submitRating, getUserRatingForBooking } from "@/lib/ratings-service";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -60,11 +61,13 @@ function BookingCard({
   item,
   onCancel,
   onRebook,
+  onReview,
   cancelling,
 }: {
   item: Booking;
   onCancel: (b: Booking) => void;
   onRebook: (b: Booking) => void;
+  onReview: (b: Booking) => void;
   cancelling: boolean;
 }) {
   const colors = useColors();
@@ -183,6 +186,24 @@ function BookingCard({
             </View>
           )}
 
+          {/* Laisser un avis : uniquement sur une réservation confirmée */}
+          {item.status === "confirmed" && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onReview(item)}
+              style={{
+                marginTop: 8, backgroundColor: "rgba(212,175,55,0.15)",
+                paddingVertical: 8, borderRadius: 8, alignItems: "center",
+                flexDirection: "row", justifyContent: "center", gap: 6,
+              }}
+            >
+              <Text style={{ fontSize: 13 }}>⭐</Text>
+              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>
+                {t("bookings.leaveReview") || "Laisser un avis"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Rebook : réservations terminées ou annulées */}
           {(item.status === "completed" || item.status === "cancelled") && (
             <TouchableOpacity
@@ -201,6 +222,125 @@ function BookingCard({
         </View>
       </View>
     </TouchableOpacity>
+  );
+}
+
+// ── Rating modal ───────────────────────────────────────────────────
+
+function RatingModal({
+  booking,
+  visible,
+  onClose,
+  onSubmitted,
+}: {
+  booking: Booking | null;
+  visible: boolean;
+  onClose: () => void;
+  onSubmitted: () => void;
+}) {
+  const colors = useColors();
+  const { t } = useTranslation();
+  const [score, setScore] = useState(0);
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  // Pré-remplit avec l'avis existant à l'ouverture.
+  useEffect(() => {
+    if (!visible || !booking) return;
+    let cancelled = false;
+    setScore(0); setComment(""); setLoading(true);
+    getUserRatingForBooking(booking.id)
+      .then((r) => { if (!cancelled && r) { setScore(r.score); setComment(r.comment ?? ""); } })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [visible, booking]);
+
+  const submit = async () => {
+    if (!booking) return;
+    if (score < 1) { notify("Choisis une note (1 à 5 étoiles)."); return; }
+    setSaving(true);
+    try {
+      await submitRating(booking.id, score, comment);
+      onSubmitted();
+      onClose();
+    } catch (e: any) {
+      notify(e.message ?? "Échec de l'envoi de l'avis.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+        <View style={{
+          backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+          padding: 22, borderWidth: 1, borderColor: colors.border,
+        }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>
+              {t("bookings.leaveReview") || "Laisser un avis"}
+            </Text>
+            <TouchableOpacity onPress={onClose}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
+          </View>
+          {booking?.venue_name ? (
+            <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 16 }}>{booking.venue_name}</Text>
+          ) : null}
+
+          {loading ? (
+            <View style={{ paddingVertical: 24, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>
+          ) : (
+            <>
+              {/* Étoiles */}
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 18 }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <TouchableOpacity key={n} onPress={() => setScore(n)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 38, color: n <= score ? "#F59E0B" : colors.border }}>
+                      {n <= score ? "★" : "☆"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Commentaire */}
+              <TextInput
+                value={comment}
+                onChangeText={setComment}
+                placeholder={t("bookings.reviewPlaceholder") || "Partage ton expérience (optionnel)…"}
+                placeholderTextColor="#555"
+                multiline
+                numberOfLines={4}
+                style={{
+                  backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12,
+                  padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border,
+                  height: 96, textAlignVertical: "top", marginBottom: 18,
+                }}
+              />
+
+              <TouchableOpacity
+                onPress={submit}
+                disabled={saving || score < 1}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: score >= 1 ? colors.primary : "#333", borderRadius: 50,
+                  paddingVertical: 15, alignItems: "center", opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving
+                  ? <ActivityIndicator color="#0A0E13" />
+                  : <Text style={{ color: score >= 1 ? "#0A0E13" : "#777", fontWeight: "800", fontSize: 15 }}>
+                      {t("common.send") || "Envoyer"}
+                    </Text>}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -231,6 +371,7 @@ export default function BookingsScreen() {
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
 
   const upcoming  = bookings.filter((b) => getDisplayTab(b) === "upcoming");
   const past      = bookings.filter((b) => getDisplayTab(b) === "past");
@@ -382,7 +523,7 @@ export default function BookingsScreen() {
           <FlatList
             data={filtered}
             renderItem={({ item }) => (
-              <BookingCard item={item} onCancel={handleCancel} onRebook={handleRebook} cancelling={cancellingId === item.id} />
+              <BookingCard item={item} onCancel={handleCancel} onRebook={handleRebook} onReview={setReviewBooking} cancelling={cancellingId === item.id} />
             )}
             keyExtractor={(item) => item.id}
             extraData={cancellingId}
@@ -413,6 +554,13 @@ export default function BookingsScreen() {
           </ScrollView>
         )}
       </View>
+
+      <RatingModal
+        booking={reviewBooking}
+        visible={!!reviewBooking}
+        onClose={() => setReviewBooking(null)}
+        onSubmitted={() => { if (!isDemoMode && user?.id) refetch(); }}
+      />
     </ScreenContainer>
   );
 }

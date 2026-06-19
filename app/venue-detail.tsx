@@ -2,6 +2,7 @@ import {
   ScrollView, Text, View, TouchableOpacity, Share, Platform,
   ActivityIndicator, Linking,
 } from "react-native";
+import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
@@ -9,6 +10,7 @@ import { ImageCarousel } from "@/components/image-carousel";
 import { useVenueBySlug } from "@/hooks/use-venues";
 import { getVenueImage } from "@/constants/venue-images";
 import { DEFAULT_OFFERS } from "@/lib/venues-service";
+import { getVenueRatings, type RatingWithUser } from "@/lib/ratings-service";
 import { useColors } from "@/hooks/use-colors";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -68,6 +70,18 @@ export default function VenueDetailScreen() {
   const router = useRouter();
 
   const { data: venue, loading, error } = useVenueBySlug(id || "");
+
+  // Avis publics (max 5 affichés) — chargés dès que la venue est connue.
+  const [reviews, setReviews] = useState<RatingWithUser[]>([]);
+  useEffect(() => {
+    const vid = venue?.id;
+    if (!vid) { setReviews([]); return; }
+    let cancelled = false;
+    getVenueRatings(vid, 5)
+      .then((r) => { if (!cancelled) setReviews(r); })
+      .catch(() => { if (!cancelled) setReviews([]); });
+    return () => { cancelled = true; };
+  }, [venue?.id]);
 
   if (loading) {
     return (
@@ -201,8 +215,15 @@ export default function VenueDetailScreen() {
               <Text style={{ fontSize: 26, fontWeight: "800", color: colors.foreground, flex: 1, lineHeight: 32 }}>
                 {venue.name}
               </Text>
-              <View style={{ backgroundColor: colors.primary, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5, marginLeft: 8, marginTop: 4 }}>
-                <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>★ {venue.rating}</Text>
+              <View style={{ alignItems: "flex-end", marginLeft: 8, marginTop: 4 }}>
+                <View style={{ backgroundColor: colors.primary, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5 }}>
+                  <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>
+                    ★ {Number((venue.rating_count ?? 0) > 0 ? (venue.rating_avg ?? 0) : venue.rating).toFixed(1)}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                  {(venue.rating_count ?? 0) > 0 ? `${venue.rating_count} avis` : "Nouveau"}
+                </Text>
               </View>
             </View>
 
@@ -324,6 +345,39 @@ export default function VenueDetailScreen() {
               ))}
             </View>
           </View>
+
+          {/* Avis clients (max 5) */}
+          {reviews.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 10 }}>
+                Avis clients ({venue.rating_count ?? reviews.length})
+              </Text>
+              {reviews.map((rev) => (
+                <View key={rev.id} style={{
+                  backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 10,
+                  borderWidth: 1, borderColor: colors.border,
+                }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }} numberOfLines={1}>
+                      {rev.user_name}
+                    </Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#F59E0B" }}>
+                      {"★".repeat(rev.score)}
+                      <Text style={{ color: colors.border }}>{"★".repeat(5 - rev.score)}</Text>
+                    </Text>
+                  </View>
+                  {rev.comment ? (
+                    <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 6 }}>
+                      {rev.comment}
+                    </Text>
+                  ) : null}
+                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 6 }}>
+                    {new Date(rev.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* CTAs */}
           <View style={{ gap: 12, marginBottom: 40 }}>

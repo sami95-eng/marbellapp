@@ -19,6 +19,8 @@ export interface Venue {
   cover_image_url: string | null;
   images: string[] | null;
   rating: number;
+  rating_avg: number | null;     // agrégat des avis (ratings.sql)
+  rating_count: number | null;
   price_range: string | null;
   avg_price_eur: number | null;
   is_partner: boolean;
