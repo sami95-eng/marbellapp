@@ -3,6 +3,7 @@ import {
   ActivityIndicator, Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { ImageCarousel } from "@/components/image-carousel";
 import { useVenueBySlug } from "@/hooks/use-venues";
@@ -283,25 +284,27 @@ export default function VenueDetailScreen() {
             )}
           </View>
 
-          {/* Galerie */}
+          {/* Galerie — vraies miniatures (cover + images[]) en grille */}
           {carouselImages.length > 1 && (
             <View style={{ marginBottom: 20 }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 10 }}>
                 Galerie ({carouselImages.length} photos)
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {carouselImages.map((img, i) => (
-                  <View key={i} style={{
-                    width: 120, height: 90, borderRadius: 10, overflow: "hidden",
-                    marginHorizontal: 4, borderWidth: 1, borderColor: colors.border,
+                  <View key={`${img.uri}-${i}`} style={{
+                    width: "31.5%", aspectRatio: 4 / 3, borderRadius: 10, overflow: "hidden",
+                    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
                   }}>
-                    <View style={{ flex: 1, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
-                      {/* expo-image thumbnail */}
-                      <Text style={{ fontSize: 28 }}>🖼️</Text>
-                    </View>
+                    <Image
+                      source={{ uri: img.uri }}
+                      style={{ width: "100%", height: "100%" }}
+                      contentFit="cover"
+                      transition={200}
+                    />
                   </View>
                 ))}
-              </ScrollView>
+              </View>
             </View>
           )}
 
