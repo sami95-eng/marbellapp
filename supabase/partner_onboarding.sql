@@ -86,16 +86,18 @@ CREATE POLICY "Admins update all bookings"
 -- ──────────────────────────────────────────────────────────────────
 -- 5) VIP_OFFERS — gérables par le propriétaire de la venue
 -- ──────────────────────────────────────────────────────────────────
+-- ⚠️ vip_offers (version B en base) lie la venue par venue_slug (TEXT),
+-- pas par venue_id. La policy joint donc sur venues.slug.
 DROP POLICY IF EXISTS "Owners manage their offers" ON public.vip_offers;
 CREATE POLICY "Owners manage their offers"
   ON public.vip_offers FOR ALL
   USING (
     EXISTS (SELECT 1 FROM public.venues v
-            WHERE v.id = vip_offers.venue_id AND v.owner_id = auth.uid())
+            WHERE v.slug = vip_offers.venue_slug AND v.owner_id = auth.uid())
   )
   WITH CHECK (
     EXISTS (SELECT 1 FROM public.venues v
-            WHERE v.id = vip_offers.venue_id AND v.owner_id = auth.uid())
+            WHERE v.slug = vip_offers.venue_slug AND v.owner_id = auth.uid())
   );
 
 -- ──────────────────────────────────────────────────────────────────
