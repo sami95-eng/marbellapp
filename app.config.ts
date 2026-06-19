@@ -91,6 +91,12 @@ const config: ExpoConfig = {
     "@react-native-community/datetimepicker",
     "expo-notifications",
     [
+      "expo-image-picker",
+      {
+        photosPermission: "Autorise $(PRODUCT_NAME) à accéder à tes photos pour illustrer ton établissement.",
+      },
+    ],
+    [
       "expo-audio",
       {
         microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",

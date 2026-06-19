@@ -24,6 +24,12 @@ import {
   type VipOffer, type OfferType,
 } from "@/lib/offers-service";
 import {
+  getOwnerVenues, uploadCover, removeCover, uploadGalleryPhoto, removeGalleryPhoto,
+  type OwnerVenue,
+} from "@/lib/venue-photos-service";
+import * as ImagePicker from "expo-image-picker";
+import { decode as decodeBase64 } from "base64-arraybuffer";
+import {
   getVenueSlots, createSlots, toggleSlot, releaseSlot, type AvailabilitySlot,
 } from "@/lib/availability-service";
 import {
@@ -31,7 +37,7 @@ import {
   type AdminClient, type ClientBooking,
 } from "@/lib/clients-service";
 
-type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "stats" | "clients";
+type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overview Tab
@@ -1074,6 +1080,184 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Photos Tab — cover + galerie via Supabase Storage (bucket "venues")
+// ─────────────────────────────────────────────────────────────────────────────
+const GALLERY_MAX = 10;
+
+function PhotosTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useColors>; isDemo: boolean; userId?: string }) {
+  const [venues, setVenues] = useState<OwnerVenue[]>([]);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!isDemo);
+  const [busy, setBusy] = useState(false);
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+  const selected = venues.find((v) => v.slug === selectedSlug) ?? null;
+
+  useEffect(() => {
+    if (isDemo) { setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    getOwnerVenues(userId ?? "")
+      .then((vs) => { if (!cancelled) { setVenues(vs); setSelectedSlug((p) => p ?? vs[0]?.slug ?? null); } })
+      .catch((e) => { if (!cancelled) notify(e.message ?? "Erreur de chargement"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isDemo, userId]);
+
+  const patch = (slug: string, p: Partial<OwnerVenue>) =>
+    setVenues((vs) => vs.map((v) => (v.slug === slug ? { ...v, ...p } : v)));
+
+  // Sélectionne une image et renvoie ses octets (cross-platform : base64 → ArrayBuffer).
+  const pickBytes = async (): Promise<{ bytes: ArrayBuffer; mime: string } | null> => {
+    if (Platform.OS !== "web") {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { notify("Permission d'accès aux photos refusée."); return null; }
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.8,
+    });
+    if (res.canceled || !res.assets?.length) return null;
+    const a = res.assets[0];
+    const mime = a.mimeType ?? "image/jpeg";
+    const bytes = a.base64 ? decodeBase64(a.base64) : await (await fetch(a.uri)).arrayBuffer();
+    return { bytes, mime };
+  };
+
+  const handleCover = async () => {
+    if (!selected || busy) return;
+    const picked = await pickBytes(); if (!picked) return;
+    setBusy(true);
+    try { const url = await uploadCover(selected.slug, picked.bytes, picked.mime); patch(selected.slug, { cover_image_url: url }); }
+    catch (e: any) { notify(e.message ?? "Échec de l'upload de la couverture"); }
+    finally { setBusy(false); }
+  };
+
+  const handleRemoveCover = async () => {
+    if (!selected || busy || !selected.cover_image_url) return;
+    setBusy(true);
+    try { await removeCover(selected.slug); patch(selected.slug, { cover_image_url: null }); }
+    catch (e: any) { notify(e.message ?? "Échec de la suppression"); }
+    finally { setBusy(false); }
+  };
+
+  const handleAddGallery = async () => {
+    if (!selected || busy) return;
+    if (selected.images.length >= GALLERY_MAX) { notify(`Maximum ${GALLERY_MAX} photos de galerie.`); return; }
+    const picked = await pickBytes(); if (!picked) return;
+    setBusy(true);
+    try { const next = await uploadGalleryPhoto(selected.slug, picked.bytes, picked.mime); patch(selected.slug, { images: next }); }
+    catch (e: any) { notify(e.message ?? "Échec de l'upload"); }
+    finally { setBusy(false); }
+  };
+
+  const handleRemoveGallery = async (url: string) => {
+    if (!selected || busy) return;
+    setBusy(true);
+    try { const next = await removeGalleryPhoto(selected.slug, url); patch(selected.slug, { images: next }); }
+    catch (e: any) { notify(e.message ?? "Échec de la suppression"); }
+    finally { setBusy(false); }
+  };
+
+  if (isDemo) {
+    return (
+      <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
+        <Text style={{ fontSize: 32 }}>📷</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center", paddingHorizontal: 24 }}>
+          L'upload de photos est désactivé en mode démo.
+        </Text>
+      </View>
+    );
+  }
+  if (loading) return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
+  if (venues.length === 0) {
+    return (
+      <View style={{ paddingVertical: 30, alignItems: "center", gap: 6 }}>
+        <Text style={{ fontSize: 32 }}>🏢</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>Aucun établissement rattaché à ce compte.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Sélecteur de venue */}
+      {venues.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8 }}>
+          {venues.map((v) => {
+            const sel = v.slug === selectedSlug;
+            return (
+              <TouchableOpacity key={v.slug} onPress={() => setSelectedSlug(v.slug)} activeOpacity={0.8}
+                style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* ── Cover ─────────────────────────────────────────────── */}
+      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 8 }}>PHOTO DE COUVERTURE</Text>
+      <View style={{ height: 170, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: colors.border, marginBottom: 10, position: "relative", backgroundColor: colors.surface }}>
+        {selected?.cover_image_url ? (
+          <Image source={{ uri: selected.cover_image_url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+        ) : (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 34 }}>🖼️</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6 }}>Aucune couverture</Text>
+          </View>
+        )}
+        {selected?.cover_image_url ? (
+          <TouchableOpacity onPress={handleRemoveCover} disabled={busy}
+            style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 16, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#EF4444", fontSize: 15 }}>🗑</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <TouchableOpacity onPress={handleCover} disabled={busy} activeOpacity={0.85}
+        style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 26, opacity: busy ? 0.6 : 1 }}>
+        <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>
+          {selected?.cover_image_url ? "Remplacer la couverture" : "Ajouter une couverture"}
+        </Text>
+      </TouchableOpacity>
+
+      {/* ── Galerie ───────────────────────────────────────────── */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5 }}>GALERIE</Text>
+        <Text style={{ fontSize: 11, color: colors.muted }}>{selected?.images.length ?? 0}/{GALLERY_MAX}</Text>
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {(selected?.images ?? []).map((url) => (
+          <View key={url} style={{ width: "31%", aspectRatio: 1, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: colors.border, position: "relative" }}>
+            <Image source={{ uri: url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+            <TouchableOpacity onPress={() => handleRemoveGallery(url)} disabled={busy}
+              style={{ position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 14, width: 26, height: 26, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#EF4444", fontSize: 12 }}>🗑</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+        {(selected?.images.length ?? 0) < GALLERY_MAX && (
+          <TouchableOpacity onPress={handleAddGallery} disabled={busy}
+            style={{ width: "31%", aspectRatio: 1, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, opacity: busy ? 0.6 : 1 }}>
+            <Text style={{ fontSize: 26, color: colors.primary }}>＋</Text>
+            <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }}>Ajouter</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Indicateur d'upload */}
+      {busy && (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18 }}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={{ color: colors.muted, fontSize: 12 }}>Transfert en cours…</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Stats Tab
 // ─────────────────────────────────────────────────────────────────────────────
 function StatsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
@@ -1821,6 +2005,7 @@ export default function PartnerDashboardScreen() {
     { id: "availability", label: t("partner.tabAvailability"), icon: "📅" },
     { id: "tables",       label: t("partner.tabTables"),       icon: "🪑" },
     { id: "offers",       label: t("partner.tabOffers"),       icon: "👑" },
+    { id: "photos",       label: "Photos",                     icon: "📷" },
     { id: "stats",        label: t("partner.tabStats"),        icon: "📈" },
     // Onglet "Clients" réservé aux admins
     ...(isAdmin ? [{ id: "clients" as Tab, label: t("admin.clients"), icon: "👥" }] : []),
@@ -1923,6 +2108,7 @@ export default function PartnerDashboardScreen() {
           {activeTab === "availability" && <AvailabilityTab colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "tables"       && <TablesTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
+          {activeTab === "photos"       && <PhotosTab       colors={colors} isDemo={isDemoMode} userId={user?.id} />}
           {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
         </View>
