@@ -1,6 +1,7 @@
 import { ScrollView, Text, View, TouchableOpacity, Alert, Platform, Modal, TextInput, ActivityIndicator, Linking } from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,13 +13,15 @@ import { supabase } from "@/lib/supabase";
 import { Image } from "expo-image";
 import { getUserVipStatus, submitPost, type VipStatus } from "@/lib/vip-service";
 
-const BADGES = [
-  { emoji: "🌟", name: "Explorer", unlocked: true },
-  { emoji: "🎉", name: "Party Goer", unlocked: true },
-  { emoji: "🍽️", name: "Foodie", unlocked: true },
-  { emoji: "🏖️", name: "Beach Lover", unlocked: true },
-  { emoji: "💎", name: "VIP", unlocked: false },
-  { emoji: "🛥️", name: "Yacht Life", unlocked: false },
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+const BADGES: { icon: IoniconName; name: string; unlocked: boolean }[] = [
+  { icon: "compass-outline",    name: "Explorer",    unlocked: true },
+  { icon: "sparkles-outline",   name: "Party Goer",  unlocked: true },
+  { icon: "restaurant-outline", name: "Foodie",      unlocked: true },
+  { icon: "umbrella-outline",   name: "Beach Lover", unlocked: true },
+  { icon: "diamond-outline",    name: "VIP",         unlocked: false },
+  { icon: "boat-outline",       name: "Yacht Life",  unlocked: false },
 ];
 
 export default function ProfileScreen() {
@@ -70,18 +73,18 @@ export default function ProfileScreen() {
 
   const completedCount = bookings.filter((b) => b.status === "completed" || b.status === "confirmed").length;
 
-  const STATS = [
-    { label: t("profile.experiences"), value: completedCount > 0 ? String(completedCount) : "0", icon: "✨" },
-    { label: t("profile.photos"),        value: "47", icon: "📸" },
-    { label: t("profile.partnerPosts"),  value: vipStatus ? String(vipStatus.post_count) : "0", icon: "🏷️" },
+  const STATS: { label: string; value: string; icon: IoniconName }[] = [
+    { label: t("profile.experiences"), value: completedCount > 0 ? String(completedCount) : "0", icon: "sparkles-outline" },
+    { label: t("profile.photos"),        value: "47", icon: "camera-outline" },
+    { label: t("profile.partnerPosts"),  value: vipStatus ? String(vipStatus.post_count) : "0", icon: "pricetag-outline" },
   ];
 
-  const MENU_ITEMS = [
-    { label: t("profile.myReservations"), icon: "📋", route: "/my-reservations" },
-    { label: t("profile.favorites"), icon: "❤️", route: "/favorites" },
-    { label: t("profile.notifications"), icon: "🔔", route: "/notifications" },
-    { label: t("profile.settings"), icon: "⚙️", route: "/settings" },
-    { label: t("profile.helpSupport"), icon: "💬", route: null },
+  const MENU_ITEMS: { label: string; icon: IoniconName; route: string | null }[] = [
+    { label: t("profile.myReservations"), icon: "list-outline", route: "/my-reservations" },
+    { label: t("profile.favorites"), icon: "heart-outline", route: "/favorites" },
+    { label: t("profile.notifications"), icon: "notifications-outline", route: "/notifications" },
+    { label: t("profile.settings"), icon: "settings-outline", route: "/settings" },
+    { label: t("profile.helpSupport"), icon: "chatbubble-ellipses-outline", route: null },
   ];
 
   const doLogout = async () => {
@@ -153,7 +156,7 @@ export default function ProfileScreen() {
         }}>
           <View style={{
             width: 88, height: 88, borderRadius: 44,
-            backgroundColor: "rgba(212,175,55,0.2)",
+            backgroundColor: colors.background,
             alignItems: "center", justifyContent: "center",
             borderWidth: 3, borderColor: colors.primary,
             overflow: "hidden",
@@ -166,13 +169,13 @@ export default function ProfileScreen() {
                 transition={300}
               />
             ) : (
-              <Text style={{ fontSize: 44 }}>👤</Text>
+              <Ionicons name="person" size={44} color={colors.muted} />
             )}
           </View>
           <Text style={{ fontSize: 22, fontWeight: "800", color: colors.foreground, marginTop: 12 }}>
             {displayName}
           </Text>
-          <Text style={{ fontSize: 13, color: colors.primary, marginTop: 2, fontWeight: "600" }}>
+          <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2, fontWeight: "600" }}>
             {displayHandle}
           </Text>
           {profile?.bio && (
@@ -185,11 +188,11 @@ export default function ProfileScreen() {
           </Text>
           <View style={{
             marginTop: 14, flexDirection: "row", alignItems: "center", gap: 6,
-            backgroundColor: "rgba(212,175,55,0.15)", paddingHorizontal: 14,
-            paddingVertical: 6, borderRadius: 20,
+            backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+            paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
           }}>
-            <Text style={{ fontSize: 14 }}>👑</Text>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
+            <Ionicons name="ribbon-outline" size={14} color={colors.primary} />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.foreground }}>
               {vipStatus ? `${vipStatus.tier.label} Member` : "Member"}
             </Text>
           </View>
@@ -198,7 +201,7 @@ export default function ProfileScreen() {
             onPress={() => router.push("/edit-profile")}
             style={{ marginTop: 16, backgroundColor: colors.primary, paddingHorizontal: 28, paddingVertical: 10, borderRadius: 12 }}
           >
-            <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 13 }}>{t("profile.editProfile")}</Text>
+            <Text style={{ color: colors.background, fontWeight: "700", fontSize: 13 }}>{t("profile.editProfile")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -209,8 +212,8 @@ export default function ProfileScreen() {
               flex: 1, backgroundColor: colors.surface, borderRadius: 14, padding: 14,
               alignItems: "center", borderWidth: 1, borderColor: colors.border,
             }}>
-              <Text style={{ fontSize: 16 }}>{stat.icon}</Text>
-              <Text style={{ fontSize: 20, fontWeight: "800", color: colors.primary, marginTop: 4 }}>{stat.value}</Text>
+              <Ionicons name={stat.icon} size={18} color={colors.muted} />
+              <Text style={{ fontSize: 20, fontWeight: "800", color: colors.foreground, marginTop: 4 }}>{stat.value}</Text>
               <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{stat.label}</Text>
             </View>
           ))}
@@ -221,8 +224,13 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>Statut VIP</Text>
             <TouchableOpacity onPress={() => { setAgreed(false); setShowSubmit(true); }} activeOpacity={0.8}
-              style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 }}>
-              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>＋ Soumettre un post</Text>
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 4,
+                backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+                paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
+              }}>
+              <Ionicons name="add" size={14} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 12 }}>Soumettre un post</Text>
             </TouchableOpacity>
           </View>
 
@@ -235,7 +243,7 @@ export default function ProfileScreen() {
                   backgroundColor: (vipStatus?.tier.color ?? "#CD7F32") + "33",
                   borderWidth: 2, borderColor: vipStatus?.tier.color ?? "#CD7F32",
                 }}>
-                  <Text style={{ fontSize: 18 }}>👑</Text>
+                  <Ionicons name="ribbon-outline" size={18} color={vipStatus?.tier.color ?? colors.muted} />
                 </View>
                 <View>
                   <Text style={{ fontSize: 16, fontWeight: "800", color: vipStatus?.tier.color ?? colors.foreground }}>
@@ -247,15 +255,15 @@ export default function ProfileScreen() {
                 </View>
               </View>
               {vipStatus && vipStatus.discount_pct > 0 ? (
-                <View style={{ backgroundColor: "rgba(74,222,128,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                  <Text style={{ color: "#4ADE80", fontWeight: "700", fontSize: 12 }}>-{vipStatus.discount_pct}%</Text>
+                <View style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.success, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                  <Text style={{ color: colors.success, fontWeight: "700", fontSize: 12 }}>-{vipStatus.discount_pct}%</Text>
                 </View>
               ) : null}
             </View>
 
             {vipStatus?.nextTier ? (
               <View style={{ marginTop: 14 }}>
-                <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: "hidden" }}>
                   <View style={{
                     height: "100%", backgroundColor: vipStatus.nextTier.color,
                     width: `${Math.max(4, Math.min(100, Math.round(((vipStatus.post_count - vipStatus.tier.min_posts) / Math.max(1, vipStatus.nextTier.min_posts - vipStatus.tier.min_posts)) * 100)))}%`,
@@ -266,7 +274,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             ) : vipStatus ? (
-              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 12 }}>Palier maximum atteint 🎉</Text>
+              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 12 }}>Palier maximum atteint.</Text>
             ) : null}
           </View>
 
@@ -274,12 +282,12 @@ export default function ProfileScreen() {
           {vipStatus && vipStatus.posts.length > 0 && (
             <View style={{ marginTop: 12, gap: 8 }}>
               {vipStatus.posts.map((p) => {
-                const sc = p.status === "approved" ? "#4ADE80" : p.status === "rejected" ? "#EF4444" : "#F59E0B";
+                const sc = p.status === "approved" ? colors.success : p.status === "rejected" ? colors.error : colors.warning;
                 const sl = p.status === "approved" ? "Approuvé" : p.status === "rejected" ? "Rejeté" : "En attente";
                 return (
                   <View key={p.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border }}>
                     <TouchableOpacity style={{ flex: 1, marginRight: 10 }} onPress={() => Linking.openURL(p.post_url).catch(() => {})} activeOpacity={0.7}>
-                      <Text style={{ fontSize: 12, color: colors.primary }} numberOfLines={1}>{p.post_url}</Text>
+                      <Text style={{ fontSize: 12, color: colors.foreground }} numberOfLines={1}>{p.post_url}</Text>
                       <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }}>
                         {new Date(p.submitted_at).toLocaleDateString("fr-FR")}
                       </Text>
@@ -302,12 +310,12 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {BADGES.map((badge) => (
               <View key={badge.name} style={{
-                backgroundColor: badge.unlocked ? colors.surface : "rgba(255,255,255,0.03)",
+                backgroundColor: badge.unlocked ? colors.surface : colors.background,
                 borderRadius: 14, padding: 12, alignItems: "center", width: 90,
-                borderWidth: 1, borderColor: badge.unlocked ? colors.border : "rgba(255,255,255,0.05)",
+                borderWidth: 1, borderColor: colors.border,
                 opacity: badge.unlocked ? 1 : 0.4,
               }}>
-                <Text style={{ fontSize: 28 }}>{badge.emoji}</Text>
+                <Ionicons name={badge.icon} size={26} color={badge.unlocked ? colors.foreground : colors.muted} />
                 <Text style={{
                   fontSize: 10, color: badge.unlocked ? colors.foreground : colors.muted,
                   textAlign: "center", fontWeight: "600", marginTop: 4,
@@ -331,7 +339,7 @@ export default function ProfileScreen() {
               }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <Text style={{ fontSize: 18 }}>{item.icon}</Text>
+                <Ionicons name={item.icon} size={18} color={colors.foreground} />
                 <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}>
                   {item.label}
                 </Text>
@@ -339,7 +347,7 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 {item.route === "/notifications" && unreadCount > 0 && (
                   <View style={{
-                    backgroundColor: "#EF4444", borderRadius: 11, minWidth: 22, height: 22,
+                    backgroundColor: colors.error, borderRadius: 11, minWidth: 22, height: 22,
                     paddingHorizontal: 6, alignItems: "center", justifyContent: "center",
                   }}>
                     <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>
@@ -347,7 +355,7 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
                 )}
-                <Text style={{ fontSize: 16, color: colors.muted }}>›</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
               </View>
             </TouchableOpacity>
           ))}
@@ -356,11 +364,11 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
             onPress={handleLogout}
             style={{
-              backgroundColor: "rgba(239,68,68,0.15)", borderRadius: 14,
-              padding: 16, alignItems: "center", marginTop: 4,
+              backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.error,
+              borderRadius: 14, padding: 16, alignItems: "center", marginTop: 4,
             }}
           >
-            <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.error }}>
               {t("profile.signOut")}
             </Text>
           </TouchableOpacity>
@@ -373,25 +381,27 @@ export default function ProfileScreen() {
           <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, borderWidth: 1, borderColor: colors.border, gap: 14 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Soumettre un post</Text>
-              <TouchableOpacity onPress={() => setShowSubmit(false)}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowSubmit(false)} accessibilityRole="button" accessibilityLabel={t("common.cancel")}>
+                <Ionicons name="close" size={22} color={colors.muted} />
+              </TouchableOpacity>
             </View>
             {/* Mini-tuto */}
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 14, fontWeight: "800", color: colors.foreground }}>Comment gagner des points VIP ?</Text>
               {[
-                { n: "1", text: "👥 Suis @marbellapp sur Instagram (obligatoire — c'est ainsi qu'on peut voir ton post même si ton compte est privé)" },
-                { n: "2", text: "📸 Publie une vraie photo ou un vrai post pris sur place, dans l'établissement que tu as visité à Marbella. Les montages, reposts ou photos génériques ne seront pas validés." },
-                { n: "3", text: "#️⃣ Ajoute #marbellappvip dans ta légende" },
-                { n: "4", text: "🔗 Ouvre le post → ••• → « Copier le lien »" },
-                { n: "5", text: "📋 Colle le lien ci-dessous et envoie" },
+                { n: "1", text: "Suis @marbellapp sur Instagram (obligatoire — c'est ainsi qu'on peut voir ton post même si ton compte est privé)" },
+                { n: "2", text: "Publie une vraie photo ou un vrai post pris sur place, dans l'établissement que tu as visité à Marbella. Les montages, reposts ou photos génériques ne seront pas validés." },
+                { n: "3", text: "Ajoute #marbellappvip dans ta légende" },
+                { n: "4", text: "Ouvre le post → ••• → « Copier le lien »" },
+                { n: "5", text: "Colle le lien ci-dessous et envoie" },
               ].map((s) => (
                 <View key={s.n} style={{
                   flexDirection: "row", gap: 10, alignItems: "flex-start",
-                  backgroundColor: "rgba(212,175,55,0.08)", borderRadius: 12, padding: 10,
-                  borderWidth: 1, borderColor: "rgba(212,175,55,0.2)",
+                  backgroundColor: colors.surface, borderRadius: 12, padding: 10,
+                  borderWidth: 1, borderColor: colors.border,
                 }}>
                   <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 12 }}>{s.n}</Text>
+                    <Text style={{ color: colors.background, fontWeight: "800", fontSize: 12 }}>{s.n}</Text>
                   </View>
                   <Text style={{ flex: 1, fontSize: 12, color: colors.foreground, lineHeight: 17 }}>{s.text}</Text>
                 </View>
@@ -427,7 +437,7 @@ export default function ProfileScreen() {
                 backgroundColor: agreed ? colors.primary : "transparent",
                 alignItems: "center", justifyContent: "center",
               }}>
-                {agreed ? <Text style={{ color: "#0A0E13", fontSize: 13, fontWeight: "900" }}>✓</Text> : null}
+                {agreed ? <Ionicons name="checkmark" size={14} color={colors.background} /> : null}
               </View>
               <Text style={{ fontSize: 13, color: colors.foreground, flex: 1 }}>
                 J'ai respecté toutes les conditions
@@ -436,20 +446,20 @@ export default function ProfileScreen() {
 
             <View>
               <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>URL DU POST *</Text>
-              <TextInput value={postUrl} onChangeText={setPostUrl} placeholder="https://instagram.com/p/..." placeholderTextColor="#555" autoCapitalize="none"
-                style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: (postUrl.trim() && !urlValid) ? "#EF4444" : colors.border }} />
+              <TextInput value={postUrl} onChangeText={setPostUrl} placeholder="https://instagram.com/p/..." placeholderTextColor={colors.muted} autoCapitalize="none"
+                style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: (postUrl.trim() && !urlValid) ? colors.error : colors.border }} />
               {postUrl.trim() && !urlValid ? (
-                <Text style={{ fontSize: 11, color: "#EF4444", marginTop: 4 }}>Le lien doit contenir « instagram.com ».</Text>
+                <Text style={{ fontSize: 11, color: colors.error, marginTop: 4 }}>Le lien doit contenir « instagram.com ».</Text>
               ) : null}
             </View>
             <View>
               <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>@INSTAGRAM</Text>
-              <TextInput value={igHandle} onChangeText={setIgHandle} placeholder="@ton_compte" placeholderTextColor="#555" autoCapitalize="none"
+              <TextInput value={igHandle} onChangeText={setIgHandle} placeholder="@ton_compte" placeholderTextColor={colors.muted} autoCapitalize="none"
                 style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
             </View>
             <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !urlValid || !agreed} activeOpacity={0.85}
-              style={{ backgroundColor: (urlValid && agreed) ? colors.primary : "#333", borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
-              {submitting ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: (urlValid && agreed) ? "#0A0E13" : "#777", fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+              style={{ backgroundColor: (urlValid && agreed) ? colors.primary : colors.surface, borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
+              {submitting ? <ActivityIndicator color={colors.background} /> : <Text style={{ color: (urlValid && agreed) ? colors.background : colors.muted, fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
             </TouchableOpacity>
           </View>
         </View>
