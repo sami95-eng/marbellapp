@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ScrollView, Text, View, TouchableOpacity, FlatList, TextInput, Switch, ActivityIndicator, Alert, Platform, Modal, Linking } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useTranslation } from "react-i18next";
@@ -39,6 +40,18 @@ import {
 } from "@/lib/clients-service";
 
 type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts";
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+// Resolves the emoji icons coming from demo-data / metric arrays to the
+// Ionicons line family, so the dashboard shares the app-wide icon system.
+const EMOJI_TO_ICON: Record<string, IoniconName> = {
+  "📋": "list-outline", "💰": "cash-outline", "📸": "camera-outline",
+  "⭐": "star-outline", "👑": "ribbon-outline", "📅": "calendar-outline",
+  "🕐": "time-outline", "📈": "trending-up-outline", "📊": "stats-chart-outline",
+  "👥": "people-outline", "🆕": "sparkles-outline", "⚡": "flash-outline",
+  "🪑": "restaurant-outline", "📷": "camera-outline", "🏢": "business-outline",
+};
+const iconFor = (e?: string): IoniconName => EMOJI_TO_ICON[e ?? ""] ?? "ellipse-outline";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overview Tab
@@ -76,10 +89,10 @@ function OverviewTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>;
             width: "47%", backgroundColor: colors.surface, borderRadius: 16,
             padding: 16, borderWidth: 1, borderColor: colors.border,
           }}>
-            <Text style={{ fontSize: 22 }}>{m.icon}</Text>
-            <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary, marginTop: 8 }}>{m.value}</Text>
+            <Ionicons name={iconFor(m.icon)} size={22} color={colors.muted} />
+            <Text style={{ fontSize: 22, fontWeight: "800", color: colors.foreground, marginTop: 8 }}>{m.value}</Text>
             <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{m.label}</Text>
-            <Text style={{ fontSize: 11, color: "#4ADE80", marginTop: 4, fontWeight: "600" }}>{m.trend}</Text>
+            <Text style={{ fontSize: 11, color: colors.success, marginTop: 4, fontWeight: "600" }}>{m.trend}</Text>
           </View>
         ))}
       </View>
@@ -93,7 +106,7 @@ function OverviewTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>;
           borderRadius: 12, padding: 12, marginBottom: 8,
           borderWidth: 1, borderColor: colors.border, gap: 12,
         }}>
-          <Text style={{ fontSize: 20 }}>{a.icon}</Text>
+          <Ionicons name={iconFor(a.icon)} size={20} color={colors.muted} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, color: colors.foreground }}>{a.msg}</Text>
             <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{a.time}</Text>
@@ -130,10 +143,10 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
   const { t } = useTranslation();
 
   const statusColors: Record<string, string> = {
-    confirmed: "#4ADE80",
-    pending:   "#FBBF24",
-    cancelled: "#EF4444",
-    completed: "#D4AF37",
+    confirmed: colors.success,
+    pending:   colors.warning,
+    cancelled: colors.error,
+    completed: colors.primary,
   };
   const statusLabel = (s: string) => ({
     confirmed: t("partner.confirmed"),
@@ -337,18 +350,20 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
   if (error) {
     return (
       <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-        <Text style={{ fontSize: 32 }}>⚠️</Text>
+        <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} />
         <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{error}</Text>
-        <TouchableOpacity onPress={load} style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
-          <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>↻ {t("common.retry") || "Réessayer"}</Text>
+        <TouchableOpacity onPress={load} accessibilityRole="button" accessibilityLabel={t("common.retry")}
+          style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+          <Ionicons name="reload" size={14} color={colors.foreground} />
+          <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 13 }}>{t("common.retry") || "Réessayer"}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const Field = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
+  const Field = ({ icon, label, value }: { icon: IoniconName; label: string; value: string }) => (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-      <Text style={{ fontSize: 12 }}>{icon}</Text>
+      <Ionicons name={icon} size={12} color={colors.muted} />
       <Text style={{ fontSize: 12, color: colors.muted }}>
         <Text style={{ color: colors.muted, fontWeight: "700" }}>{label}: </Text>{value}
       </Text>
@@ -367,14 +382,14 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
           <Text style={{ fontSize: 13, color: colors.muted }}>
             {rows.length} · {t("partner.tabReservations")}
           </Text>
-          <TouchableOpacity onPress={load} activeOpacity={0.7} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>↻</Text>
+          <TouchableOpacity onPress={load} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t("common.retry")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+            <Ionicons name="reload" size={14} color={colors.muted} />
           </TouchableOpacity>
         </View>
       }
       ListEmptyComponent={
         <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 32 }}>📋</Text>
+          <Ionicons name="list-outline" size={32} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: 13 }}>{t("partner.noReservations") || "Aucune réservation"}</Text>
           {!isDemo && (
             <Text style={{ color: colors.muted, fontSize: 11, textAlign: "center", paddingHorizontal: 24, marginTop: 4 }}>
@@ -400,16 +415,21 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
                 activeOpacity={0.7}
                 style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}
               >
-                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "700" }}>
-                  {editingId === item.id ? "✕" : `✏️ ${t("partner.edit")}`}
-                </Text>
+                {editingId === item.id ? (
+                  <Ionicons name="close" size={14} color={colors.muted} />
+                ) : (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Ionicons name="create-outline" size={13} color={colors.foreground} />
+                    <Text style={{ fontSize: 12, color: colors.foreground, fontWeight: "700" }}>{t("partner.edit")}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
             <View style={{
-              backgroundColor: `${statusColors[item.status] ?? "#888"}20`,
+              backgroundColor: `${statusColors[item.status] ?? colors.muted}20`,
               paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
             }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: statusColors[item.status] ?? "#888" }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: statusColors[item.status] ?? colors.muted }}>
                 {statusLabel(item.status)}
               </Text>
             </View>
@@ -417,37 +437,50 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
 
           {/* Venue */}
           {item.venueName ? (
-            <Text style={{ fontSize: 13, color: colors.primary, marginTop: 4, fontWeight: "700" }}>
-              📍 {item.venueName}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+              <Ionicons name="location-outline" size={13} color={colors.muted} />
+              <Text style={{ fontSize: 13, color: colors.foreground, fontWeight: "700" }}>{item.venueName}</Text>
+            </View>
           ) : null}
 
           {/* Détails complets */}
           <View style={{ marginTop: 8 }}>
             <View style={{ flexDirection: "row", gap: 16 }}>
-              <Text style={{ fontSize: 12, color: colors.muted }}>📅 {item.date}</Text>
-              <Text style={{ fontSize: 12, color: colors.muted }}>🕐 {item.time}</Text>
-              <Text style={{ fontSize: 12, color: colors.muted }}>👥 {item.guests} {t("partner.persons")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="calendar-outline" size={12} color={colors.muted} />
+                <Text style={{ fontSize: 12, color: colors.muted }}>{item.date}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="time-outline" size={12} color={colors.muted} />
+                <Text style={{ fontSize: 12, color: colors.muted }}>{item.time}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="people-outline" size={12} color={colors.muted} />
+                <Text style={{ fontSize: 12, color: colors.muted }}>{item.guests} {t("partner.persons")}</Text>
+              </View>
             </View>
-            {item.phone ? <Field icon="📞" label="Tél" value={item.phone} /> : null}
-            {item.userEmail ? <Field icon="✉️" label="Email" value={item.userEmail} /> : null}
+            {item.phone ? <Field icon="call-outline" label="Tél" value={item.phone} /> : null}
+            {item.userEmail ? <Field icon="mail-outline" label="Email" value={item.userEmail} /> : null}
             {item.tableName ? (
               <Field
-                icon="🪑"
+                icon="restaurant-outline"
                 label="Table"
                 value={item.tableName + (item.tablePrice != null ? ` · From €${Number(item.tablePrice).toLocaleString()}` : "")}
               />
             ) : null}
-            {item.confirmationNumber ? <Field icon="🔖" label="Réf" value={item.confirmationNumber} /> : null}
+            {item.confirmationNumber ? <Field icon="bookmark-outline" label="Réf" value={item.confirmationNumber} /> : null}
           </View>
 
           {/* Panneau d'édition date/heure */}
           {editingId === item.id && (
             <View style={{
               marginTop: 12, padding: 12, borderRadius: 12,
-              backgroundColor: colors.background, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)", gap: 10,
+              backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, gap: 10,
             }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>📅 {t("partner.edit")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>{t("partner.edit")}</Text>
+              </View>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "600" }}>{t("partner.dateLabel")}</Text>
@@ -455,7 +488,7 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
                     value={editDate}
                     onChangeText={setEditDate}
                     placeholder="2026-06-20"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={colors.muted}
                     autoCapitalize="none"
                     style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, fontSize: 13, borderWidth: 1, borderColor: colors.border }}
                   />
@@ -466,7 +499,7 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
                     value={editTime}
                     onChangeText={setEditTime}
                     placeholder="21:00"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={colors.muted}
                     autoCapitalize="none"
                     style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, fontSize: 13, borderWidth: 1, borderColor: colors.border }}
                   />
@@ -488,8 +521,8 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
                   style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: colors.primary, opacity: busyIds.has(item.id) ? 0.5 : 1 }}
                 >
                   {busyIds.has(item.id)
-                    ? <ActivityIndicator color="#0A0E13" size="small" />
-                    : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 13 }}>{t("partner.save")}</Text>}
+                    ? <ActivityIndicator color={colors.background} size="small" />
+                    : <Text style={{ color: colors.background, fontWeight: "800", fontSize: 13 }}>{t("partner.save")}</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -507,24 +540,30 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
                     disabled={busy}
                     onPress={() => decide(item, "confirmed")}
                     activeOpacity={0.8}
-                    style={{ flex: 1, backgroundColor: "#4ADE80", borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}
+                    style={{ flex: 1, backgroundColor: colors.success, borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}
                   >
                     {busy
-                      ? <ActivityIndicator color="#0A0E13" size="small" />
-                      : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 13 }}>✓ {t("partner.confirm")}</Text>}
+                      ? <ActivityIndicator color={colors.background} size="small" />
+                      : <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons name="checkmark" size={15} color={colors.background} />
+                          <Text style={{ color: colors.background, fontWeight: "800", fontSize: 13 }}>{t("partner.confirm")}</Text>
+                        </View>}
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
                   disabled={busy}
                   onPress={() => decide(item, "cancelled")}
                   activeOpacity={0.8}
-                  style={{ flex: 1, backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1, borderColor: "#EF4444", borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}
+                  style={{ flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.error, borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}
                 >
                   {busy && item.status === "confirmed"
-                    ? <ActivityIndicator color="#EF4444" size="small" />
-                    : <Text style={{ color: "#EF4444", fontWeight: "800", fontSize: 13 }}>
-                        ✕ {item.status === "pending" ? t("partner.refuse") : t("partner.cancelBooking")}
-                      </Text>}
+                    ? <ActivityIndicator color={colors.error} size="small" />
+                    : <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Ionicons name="close" size={15} color={colors.error} />
+                        <Text style={{ color: colors.error, fontWeight: "800", fontSize: 13 }}>
+                          {item.status === "pending" ? t("partner.refuse") : t("partner.cancelBooking")}
+                        </Text>
+                      </View>}
                 </TouchableOpacity>
               </View>
             );
@@ -700,7 +739,7 @@ function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnTy
           return (
             <TouchableOpacity key={v.id} onPress={() => setVenueId(v.id)} activeOpacity={0.8}
               style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? colors.background : colors.foreground }} numberOfLines={1}>{v.name}</Text>
             </TouchableOpacity>
           );
         })}
@@ -710,12 +749,12 @@ function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnTy
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "700", marginBottom: 3 }}>{t("partner.slotStart")}</Text>
-          <TextInput value={start} onChangeText={setStart} placeholder="10:00" placeholderTextColor="#555"
+          <TextInput value={start} onChangeText={setStart} placeholder="10:00" placeholderTextColor={colors.muted}
             style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 13, borderWidth: 1, borderColor: colors.border, textAlign: "center" }} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "700", marginBottom: 3 }}>{t("partner.slotEnd")}</Text>
-          <TextInput value={end} onChangeText={setEnd} placeholder="00:00" placeholderTextColor="#555"
+          <TextInput value={end} onChangeText={setEnd} placeholder="00:00" placeholderTextColor={colors.muted}
             style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 13, borderWidth: 1, borderColor: colors.border, textAlign: "center" }} />
         </View>
         <View style={{ flex: 1.1 }}>
@@ -735,15 +774,15 @@ function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnTy
       {/* Légende */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#4ADE80" }} />
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: colors.success }} />
           <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.available")}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#2A2F37" }} />
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: colors.border }} />
           <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.unavailable")}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: "#EF4444" }} />
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: colors.error }} />
           <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.slotFullLabel")}</Text>
         </View>
       </View>
@@ -781,12 +820,12 @@ function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnTy
                       activeOpacity={0.7}
                       style={{
                         width: COL_W - 4, height: 38, marginHorizontal: 2, borderRadius: 7,
-                        backgroundColor: active ? (full ? "#EF4444" : "#4ADE80") : "#2A2F37",
+                        backgroundColor: active ? (full ? colors.error : colors.success) : colors.border,
                         alignItems: "center", justifyContent: "center",
                       }}
                     >
                       {active && s ? (
-                        <Text style={{ fontSize: 9, fontWeight: "800", color: "#0A0E13" }}>
+                        <Text style={{ fontSize: 9, fontWeight: "800", color: colors.background }}>
                           {s.current_bookings}/{s.max_capacity}
                         </Text>
                       ) : null}
@@ -811,8 +850,8 @@ function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnTy
         }}
       >
         {saving
-          ? <ActivityIndicator color="#0A0E13" />
-          : <Text style={{ color: dirty ? "#0A0E13" : colors.muted, fontWeight: "800", fontSize: 15 }}>
+          ? <ActivityIndicator color={colors.background} />
+          : <Text style={{ color: dirty ? colors.background : colors.muted, fontWeight: "800", fontSize: 15 }}>
               {dirty ? t("partner.saveSlots") : t("partner.allSaved")}
             </Text>}
       </TouchableOpacity>
@@ -829,8 +868,8 @@ function AvailabilityTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnTy
 // ─────────────────────────────────────────────────────────────────────────────
 // Offers Tab
 // ─────────────────────────────────────────────────────────────────────────────
-const OFFER_TYPE_ICONS: Record<OfferType, string> = {
-  table: "🪑", bed: "🛏️", bottle: "🍾", discount: "🏷️", experience: "💎",
+const OFFER_TYPE_ICONS: Record<OfferType, IoniconName> = {
+  table: "restaurant-outline", bed: "bed-outline", bottle: "wine-outline", discount: "pricetag-outline", experience: "diamond-outline",
 };
 const OFFER_TYPES: OfferType[] = ["table", "bed", "bottle", "discount", "experience"];
 const EMPTY_OFFER = { title: "", type: "table" as OfferType, original_price: "", vip_price: "", spots_total: "10" };
@@ -950,7 +989,7 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
             return (
               <TouchableOpacity key={v.id} onPress={() => setSelectedVenueId(v.id)} activeOpacity={0.8}
                 style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? colors.background : colors.foreground }} numberOfLines={1}>{v.name}</Text>
               </TouchableOpacity>
             );
           })}
@@ -967,21 +1006,24 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
           borderWidth: showForm ? 1 : 0, borderColor: colors.border, opacity: (!isDemo && venues.length === 0) ? 0.5 : 1,
         }}
       >
-        <Text style={{ fontSize: 16, color: showForm ? colors.muted : "#0A0E13" }}>{showForm ? "✕" : "+"}</Text>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: showForm ? colors.muted : "#0A0E13" }}>
+        <Ionicons name={showForm ? "close" : "add"} size={16} color={showForm ? colors.muted : colors.background} />
+        <Text style={{ fontSize: 14, fontWeight: "700", color: showForm ? colors.muted : colors.background }}>
           {showForm ? t("common.cancel") : t("partner.createOffer")}
         </Text>
       </TouchableOpacity>
 
       {/* Formulaire de création */}
       {showForm && (
-        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)", gap: 12 }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primary }}>👑 Nouvelle offre</Text>
+        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border, gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="pricetags-outline" size={15} color={colors.primary} />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primary }}>Nouvelle offre</Text>
+          </View>
 
           <View>
             <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>TITRE *</Text>
             <TextInput value={form.title} onChangeText={(v) => setForm((p) => ({ ...p, title: v }))}
-              placeholder="ex. Table VIP + bouteille" placeholderTextColor="#444"
+              placeholder="ex. Table VIP + bouteille" placeholderTextColor={colors.muted}
               style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
           </View>
 
@@ -993,8 +1035,8 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
                 return (
                   <TouchableOpacity key={ty} onPress={() => setForm((p) => ({ ...p, type: ty }))}
                     style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: sel ? colors.primary : colors.background, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
-                    <Text style={{ fontSize: 14 }}>{OFFER_TYPE_ICONS[ty]}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: sel ? "#0A0E13" : colors.muted }}>{ty}</Text>
+                    <Ionicons name={OFFER_TYPE_ICONS[ty]} size={14} color={sel ? colors.background : colors.muted} />
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: sel ? colors.background : colors.muted }}>{ty}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1005,26 +1047,26 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>PRIX NORMAL (€)</Text>
               <TextInput value={form.original_price} onChangeText={(v) => setForm((p) => ({ ...p, original_price: v }))}
-                keyboardType="numeric" placeholder="500" placeholderTextColor="#444"
+                keyboardType="numeric" placeholder="500" placeholderTextColor={colors.muted}
                 style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>PRIX VIP (€)</Text>
               <TextInput value={form.vip_price} onChangeText={(v) => setForm((p) => ({ ...p, vip_price: v }))}
-                keyboardType="numeric" placeholder="350" placeholderTextColor="#444"
+                keyboardType="numeric" placeholder="350" placeholderTextColor={colors.muted}
                 style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
             </View>
             <View style={{ width: 80 }}>
               <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 4, fontWeight: "600" }}>PLACES</Text>
               <TextInput value={form.spots_total} onChangeText={(v) => setForm((p) => ({ ...p, spots_total: v }))}
-                keyboardType="numeric" placeholder="10" placeholderTextColor="#444"
+                keyboardType="numeric" placeholder="10" placeholderTextColor={colors.muted}
                 style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
             </View>
           </View>
 
           <TouchableOpacity onPress={handleSave} disabled={saving || !form.title.trim()}
-            style={{ backgroundColor: form.title.trim() ? colors.primary : "#333", borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 4 }}>
-            {saving ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>Enregistrer l'offre</Text>}
+            style={{ backgroundColor: form.title.trim() ? colors.primary : colors.surface, borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 4 }}>
+            {saving ? <ActivityIndicator color={colors.background} /> : <Text style={{ color: colors.background, fontWeight: "700", fontSize: 14 }}>Enregistrer l'offre</Text>}
           </TouchableOpacity>
         </View>
       )}
@@ -1037,7 +1079,7 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
       {/* Aucune venue rattachée */}
       {!isDemo && !loading && venues.length === 0 && (
         <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
-          <Text style={{ fontSize: 32 }}>🏢</Text>
+          <Ionicons name="business-outline" size={32} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>Aucun établissement rattaché à ce compte.</Text>
         </View>
       )}
@@ -1046,31 +1088,31 @@ function OffersTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
       {!loading && venues.length > 0 || isDemo ? (
         offers.length === 0 && !loading ? (
           <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
-            <Text style={{ fontSize: 32 }}>👑</Text>
+            <Ionicons name="pricetags-outline" size={32} color={colors.muted} />
             <Text style={{ color: colors.muted, fontSize: 13 }}>Aucune offre pour le moment</Text>
           </View>
         ) : offers.map((item) => (
           <View key={item.id} style={{
             backgroundColor: colors.surface, borderRadius: 14, padding: 16, marginBottom: 10,
-            borderWidth: 1, borderColor: item.is_active ? colors.border : "rgba(239,68,68,0.2)", opacity: item.is_active ? 1 : 0.6,
+            borderWidth: 1, borderColor: item.is_active ? colors.border : colors.error, opacity: item.is_active ? 1 : 0.6,
           }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                <Text style={{ fontSize: 24 }}>{OFFER_TYPE_ICONS[item.type] ?? "🎫"}</Text>
+                <Ionicons name={OFFER_TYPE_ICONS[item.type] ?? "ticket-outline"} size={22} color={colors.foreground} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }} numberOfLines={1}>{item.title}</Text>
-                  <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>{item.type}</Text>
+                  <Text style={{ fontSize: 12, color: colors.muted, fontWeight: "600" }}>{item.type}</Text>
                 </View>
               </View>
               <Switch value={item.is_active} onValueChange={(v) => handleToggle(item.id, v)}
-                trackColor={{ false: "#3A3A3A", true: "#D4AF37" }} style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} />
+                trackColor={{ false: colors.border, true: colors.primary }} style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} />
               <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 4, marginLeft: 4 }}>
-                <Text style={{ fontSize: 14, color: "#EF4444" }}>🗑</Text>
+                <Ionicons name="trash-outline" size={16} color={colors.error} />
               </TouchableOpacity>
             </View>
             <View style={{ flexDirection: "row", marginTop: 10, gap: 16, alignItems: "center" }}>
               {item.vip_price != null && <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary }}>€{Number(item.vip_price).toLocaleString()}</Text>}
-              {item.original_price != null && <Text style={{ fontSize: 11, color: "#888", textDecorationLine: "line-through" }}>€{Number(item.original_price).toLocaleString()}</Text>}
+              {item.original_price != null && <Text style={{ fontSize: 11, color: colors.muted, textDecorationLine: "line-through" }}>€{Number(item.original_price).toLocaleString()}</Text>}
               <Text style={{ fontSize: 12, color: colors.muted }}>{item.spots_remaining}/{item.spots_total} {t("partner.spotsLeft")}</Text>
             </View>
           </View>
@@ -1164,7 +1206,7 @@ function PhotosTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useCo
   if (isDemo) {
     return (
       <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-        <Text style={{ fontSize: 32 }}>📷</Text>
+        <Ionicons name="camera-outline" size={32} color={colors.muted} />
         <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center", paddingHorizontal: 24 }}>
           L'upload de photos est désactivé en mode démo.
         </Text>
@@ -1191,7 +1233,7 @@ function PhotosTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useCo
             return (
               <TouchableOpacity key={v.slug} onPress={() => setSelectedSlug(v.slug)} activeOpacity={0.8}
                 style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? colors.background : colors.foreground }} numberOfLines={1}>{v.name}</Text>
               </TouchableOpacity>
             );
           })}
@@ -1205,20 +1247,20 @@ function PhotosTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useCo
           <Image source={{ uri: selected.cover_image_url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 34 }}>🖼️</Text>
+            <Ionicons name="image-outline" size={34} color={colors.muted} />
             <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6 }}>Aucune couverture</Text>
           </View>
         )}
         {selected?.cover_image_url ? (
           <TouchableOpacity onPress={handleRemoveCover} disabled={busy}
             style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 16, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#EF4444", fontSize: 15 }}>🗑</Text>
+            <Ionicons name="trash-outline" size={16} color={colors.error} />
           </TouchableOpacity>
         ) : null}
       </View>
       <TouchableOpacity onPress={handleCover} disabled={busy} activeOpacity={0.85}
         style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 26, opacity: busy ? 0.6 : 1 }}>
-        <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>
+        <Text style={{ color: colors.background, fontWeight: "800", fontSize: 14 }}>
           {selected?.cover_image_url ? "Remplacer la couverture" : "Ajouter une couverture"}
         </Text>
       </TouchableOpacity>
@@ -1234,7 +1276,7 @@ function PhotosTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useCo
             <Image source={{ uri: url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
             <TouchableOpacity onPress={() => handleRemoveGallery(url)} disabled={busy}
               style={{ position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 14, width: 26, height: 26, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#EF4444", fontSize: 12 }}>🗑</Text>
+              <Ionicons name="trash-outline" size={13} color={colors.error} />
             </TouchableOpacity>
           </View>
         ))}
@@ -1439,7 +1481,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
             return (
               <TouchableOpacity key={v.id} onPress={() => setSelectedVenueId(v.id)} activeOpacity={0.8}
                 style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, backgroundColor: sel ? colors.primary : colors.surface, borderWidth: 1, borderColor: sel ? colors.primary : colors.border }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? "#0A0E13" : colors.foreground }} numberOfLines={1}>{v.name}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? colors.background : colors.foreground }} numberOfLines={1}>{v.name}</Text>
               </TouchableOpacity>
             );
           })}
@@ -1449,7 +1491,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
       {/* Aucune venue rattachée */}
       {!isDemo && !loading && venues.length === 0 && (
         <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
-          <Text style={{ fontSize: 32 }}>🏢</Text>
+          <Ionicons name="business-outline" size={32} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>
             Aucun établissement rattaché à ce compte.
           </Text>
@@ -1466,10 +1508,8 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
           borderWidth: showForm ? 1 : 0, borderColor: colors.border,
         }}
       >
-        <Text style={{ fontSize: 16, color: showForm ? colors.muted : "#0A0E13" }}>
-          {showForm ? "✕" : "+"}
-        </Text>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: showForm ? colors.muted : "#0A0E13" }}>
+        <Ionicons name={showForm ? "close" : "add"} size={16} color={showForm ? colors.muted : colors.background} />
+        <Text style={{ fontSize: 14, fontWeight: "700", color: showForm ? colors.muted : colors.background }}>
           {showForm ? "Cancel" : "Add New Table"}
         </Text>
       </TouchableOpacity>
@@ -1478,12 +1518,13 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
       {showForm && (
         <View style={{
           backgroundColor: colors.surface, borderRadius: 16, padding: 16,
-          marginBottom: 16, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
+          marginBottom: 16, borderWidth: 1, borderColor: colors.border,
           gap: 12,
         }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primary, marginBottom: 4 }}>
-            🪑 New Table
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <Ionicons name="restaurant-outline" size={15} color={colors.primary} />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primary }}>New Table</Text>
+          </View>
 
           {/* Name */}
           <View>
@@ -1492,7 +1533,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
               value={form.name}
               onChangeText={(v) => setForm((p) => ({ ...p, name: v }))}
               placeholder="e.g. VIP Cabana"
-              placeholderTextColor="#444"
+              placeholderTextColor={colors.muted}
               style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }}
             />
           </View>
@@ -1504,7 +1545,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
               value={form.description}
               onChangeText={(v) => setForm((p) => ({ ...p, description: v }))}
               placeholder="Brief description of this table..."
-              placeholderTextColor="#444"
+              placeholderTextColor={colors.muted}
               multiline
               numberOfLines={2}
               style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 13, borderWidth: 1, borderColor: colors.border, height: 60, textAlignVertical: "top" }}
@@ -1518,12 +1559,12 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <TouchableOpacity onPress={() => setForm((p) => ({ ...p, capacity_min: Math.max(1, p.capacity_min - 1) }))}
                   style={{ backgroundColor: colors.primary, borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "#0A0E13", fontWeight: "700" }}>−</Text>
+                  <Text style={{ color: colors.background, fontWeight: "700" }}>−</Text>
                 </TouchableOpacity>
                 <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 16, width: 24, textAlign: "center" }}>{form.capacity_min}</Text>
                 <TouchableOpacity onPress={() => setForm((p) => ({ ...p, capacity_min: p.capacity_min + 1 }))}
                   style={{ backgroundColor: colors.primary, borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "#0A0E13", fontWeight: "700" }}>+</Text>
+                  <Text style={{ color: colors.background, fontWeight: "700" }}>+</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1532,12 +1573,12 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <TouchableOpacity onPress={() => setForm((p) => ({ ...p, capacity_max: Math.max(p.capacity_min, p.capacity_max - 1) }))}
                   style={{ backgroundColor: colors.primary, borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "#0A0E13", fontWeight: "700" }}>−</Text>
+                  <Text style={{ color: colors.background, fontWeight: "700" }}>−</Text>
                 </TouchableOpacity>
                 <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 16, width: 24, textAlign: "center" }}>{form.capacity_max}</Text>
                 <TouchableOpacity onPress={() => setForm((p) => ({ ...p, capacity_max: p.capacity_max + 1 }))}
                   style={{ backgroundColor: colors.primary, borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "#0A0E13", fontWeight: "700" }}>+</Text>
+                  <Text style={{ color: colors.background, fontWeight: "700" }}>+</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1551,7 +1592,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
               onChangeText={(v) => setForm((p) => ({ ...p, price_min: parseInt(v) || 0 }))}
               keyboardType="numeric"
               placeholder="e.g. 500"
-              placeholderTextColor="#444"
+              placeholderTextColor={colors.muted}
               style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 14, borderWidth: 1, borderColor: colors.border }}
             />
           </View>
@@ -1563,7 +1604,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
               value={form.photo_url ?? ""}
               onChangeText={(v) => setForm((p) => ({ ...p, photo_url: v || null }))}
               placeholder="https://images.unsplash.com/..."
-              placeholderTextColor="#444"
+              placeholderTextColor={colors.muted}
               autoCapitalize="none"
               style={{ backgroundColor: colors.background, color: colors.foreground, borderRadius: 10, padding: 10, fontSize: 12, borderWidth: 1, borderColor: colors.border }}
             />
@@ -1578,7 +1619,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
             <Switch
               value={form.is_vip}
               onValueChange={(v) => setForm((p) => ({ ...p, is_vip: v }))}
-              trackColor={{ false: "#3A3A3A", true: "#D4AF37" }}
+              trackColor={{ false: colors.border, true: colors.primary }}
             />
           </View>
 
@@ -1587,14 +1628,14 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
             onPress={handleSave}
             disabled={saving || !form.name.trim()}
             style={{
-              backgroundColor: form.name.trim() ? colors.primary : "#333",
+              backgroundColor: form.name.trim() ? colors.primary : colors.surface,
               borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 4,
             }}
           >
             {saving ? (
-              <ActivityIndicator color="#0A0E13" />
+              <ActivityIndicator color={colors.background} />
             ) : (
-              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>Save Table</Text>
+              <Text style={{ color: colors.background, fontWeight: "700", fontSize: 14 }}>Save Table</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1610,7 +1651,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
       {/* Table list */}
       {tables.length === 0 && !loading ? (
         <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
-          <Text style={{ fontSize: 36 }}>🪑</Text>
+          <Ionicons name="restaurant-outline" size={36} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: 14 }}>No tables yet</Text>
           <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center" }}>
             Add your first table to start accepting bookings
@@ -1622,7 +1663,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
             backgroundColor: colors.surface, borderRadius: 16,
             marginBottom: 12, overflow: "hidden",
             borderWidth: 1,
-            borderColor: table.is_active ? colors.border : "rgba(239,68,68,0.2)",
+            borderColor: table.is_active ? colors.border : colors.error,
             opacity: table.is_active ? 1 : 0.65,
           }}>
             <View style={{ flexDirection: "row" }}>
@@ -1636,7 +1677,7 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
                   />
                 ) : (
                   <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 28 }}>🪑</Text>
+                    <Ionicons name="restaurant-outline" size={28} color={colors.muted} />
                   </View>
                 )}
               </View>
@@ -1648,15 +1689,18 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
                     {table.name}
                   </Text>
                   {table.is_vip && (
-                    <View style={{ backgroundColor: "rgba(212,175,55,0.2)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                      <Text style={{ fontSize: 9, color: "#D4AF37", fontWeight: "700" }}>VIP</Text>
+                    <View style={{ backgroundColor: colors.background, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, color: colors.primary, fontWeight: "700" }}>VIP</Text>
                     </View>
                   )}
                 </View>
-                <Text style={{ color: colors.muted, fontSize: 11 }}>
-                  👥 {table.capacity_min}–{table.capacity_max} guests
-                </Text>
-                <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Ionicons name="people-outline" size={11} color={colors.muted} />
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>
+                    {table.capacity_min}–{table.capacity_max} guests
+                  </Text>
+                </View>
+                <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 12 }}>
                   From €{table.price_min.toLocaleString()}
                   {table.price_max ? ` · Max €${table.price_max.toLocaleString()}` : ""}
                 </Text>
@@ -1667,14 +1711,14 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
                 <Switch
                   value={table.is_active}
                   onValueChange={(v) => handleToggle(table.id, v)}
-                  trackColor={{ false: "#3A3A3A", true: "#D4AF37" }}
+                  trackColor={{ false: colors.border, true: colors.primary }}
                   style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                 />
                 <TouchableOpacity
                   onPress={() => handleDelete(table.id)}
                   style={{ padding: 4 }}
                 >
-                  <Text style={{ fontSize: 14, color: "#EF4444" }}>🗑</Text>
+                  <Ionicons name="trash-outline" size={16} color={colors.error} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1730,14 +1774,14 @@ function VipPostsTab({ colors }: { colors: ReturnType<typeof useColors> }) {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <Text style={{ fontSize: 13, color: colors.muted }}>{posts.length} post(s) en attente</Text>
-        <TouchableOpacity onPress={load} activeOpacity={0.7} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
-          <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>↻</Text>
+        <TouchableOpacity onPress={load} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Rafraîchir" style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+          <Ionicons name="reload" size={14} color={colors.muted} />
         </TouchableOpacity>
       </View>
 
       {posts.length === 0 ? (
         <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 32 }}>📸</Text>
+          <Ionicons name="camera-outline" size={32} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: 13 }}>Aucun post à valider</Text>
         </View>
       ) : posts.map((p) => {
@@ -1751,19 +1795,30 @@ function VipPostsTab({ colors }: { colors: ReturnType<typeof useColors> }) {
               {p.instagram_handle ? <Text style={{ fontSize: 12, color: colors.primary }}>@{p.instagram_handle}</Text> : null}
             </View>
             <TouchableOpacity onPress={() => Linking.openURL(p.post_url).catch(() => {})} activeOpacity={0.7} style={{ marginTop: 6 }}>
-              <Text style={{ fontSize: 12, color: colors.primary }} numberOfLines={1}>🔗 {p.post_url}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="link-outline" size={13} color={colors.muted} />
+                <Text style={{ fontSize: 12, color: colors.foreground, flex: 1 }} numberOfLines={1}>{p.post_url}</Text>
+              </View>
             </TouchableOpacity>
             <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>
               {p.hashtag ?? "#marbellappvip"} · {new Date(p.submitted_at).toLocaleDateString("fr-FR")}
             </Text>
             <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
               <TouchableOpacity disabled={busy} onPress={() => decide(p.id, "approve")} activeOpacity={0.8}
-                style={{ flex: 1, backgroundColor: "#4ADE80", borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}>
-                {busy ? <ActivityIndicator color="#0A0E13" size="small" /> : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 13 }}>✓ Approuver</Text>}
+                style={{ flex: 1, backgroundColor: colors.success, borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+                {busy ? <ActivityIndicator color={colors.background} size="small" /> : (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Ionicons name="checkmark" size={15} color={colors.background} />
+                    <Text style={{ color: colors.background, fontWeight: "800", fontSize: 13 }}>Approuver</Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <TouchableOpacity disabled={busy} onPress={() => decide(p.id, "reject")} activeOpacity={0.8}
-                style={{ flex: 1, backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1, borderColor: "#EF4444", borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}>
-                <Text style={{ color: "#EF4444", fontWeight: "800", fontSize: 13 }}>✕ Rejeter</Text>
+                style={{ flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.error, borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="close" size={15} color={colors.error} />
+                  <Text style={{ color: colors.error, fontWeight: "800", fontSize: 13 }}>Rejeter</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -1882,8 +1937,8 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
 
   const StatCard = ({ label, value, icon }: { label: string; value: string | number; icon: string }) => (
     <View style={{ width: "47%", backgroundColor: colors.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.border }}>
-      <Text style={{ fontSize: 18 }}>{icon}</Text>
-      <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary, marginTop: 6 }}>{value}</Text>
+      <Ionicons name={iconFor(icon)} size={18} color={colors.muted} />
+      <Text style={{ fontSize: 22, fontWeight: "800", color: colors.foreground, marginTop: 6 }}>{value}</Text>
       <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{label}</Text>
     </View>
   );
@@ -1891,14 +1946,14 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
   const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
     <TouchableOpacity onPress={() => setSortKey(k)}
       style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: sortKey === k ? colors.primary : colors.surface, borderWidth: 1, borderColor: sortKey === k ? colors.primary : colors.border }}>
-      <Text style={{ fontSize: 10, fontWeight: "700", color: sortKey === k ? "#0A0E13" : colors.muted }}>{label}</Text>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: sortKey === k ? colors.background : colors.muted }}>{label}</Text>
     </TouchableOpacity>
   );
 
   if (loading) return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
   if (error) return (
     <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-      <Text style={{ fontSize: 32 }}>⚠️</Text>
+      <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} />
       <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{error}</Text>
     </View>
   );
@@ -1918,7 +1973,7 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
         value={search}
         onChangeText={(v) => { setSearch(v); setPage(0); }}
         placeholder={t("admin.searchClients")}
-        placeholderTextColor="#555"
+        placeholderTextColor={colors.muted}
         style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}
       />
 
@@ -1927,7 +1982,7 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
         {(["all", "active", "inactive"] as const).map((s) => (
           <TouchableOpacity key={s} onPress={() => { setStatusFilter(s); setPage(0); }}
             style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8, backgroundColor: statusFilter === s ? colors.primary : colors.surface, borderWidth: 1, borderColor: statusFilter === s ? colors.primary : colors.border }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: statusFilter === s ? "#0A0E13" : colors.muted }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: statusFilter === s ? colors.background : colors.muted }}>
               {s === "all" ? t("admin.all") : s === "active" ? t("admin.active") : t("admin.inactive")}
             </Text>
           </TouchableOpacity>
@@ -1939,12 +1994,12 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 6 }}>
           <TouchableOpacity onPress={() => { setVenueFilter(null); setPage(0); }}
             style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, backgroundColor: !venueFilter ? colors.primary : colors.surface, borderWidth: 1, borderColor: !venueFilter ? colors.primary : colors.border }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: !venueFilter ? "#0A0E13" : colors.muted }}>{t("admin.allVenues")}</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: !venueFilter ? colors.background : colors.muted }}>{t("admin.allVenues")}</Text>
           </TouchableOpacity>
           {venueOptions.map((v) => (
             <TouchableOpacity key={v} onPress={() => { setVenueFilter(v); setPage(0); }}
               style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, backgroundColor: venueFilter === v ? colors.primary : colors.surface, borderWidth: 1, borderColor: venueFilter === v ? colors.primary : colors.border }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: venueFilter === v ? "#0A0E13" : colors.muted }} numberOfLines={1}>{v}</Text>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: venueFilter === v ? colors.background : colors.muted }} numberOfLines={1}>{v}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -1961,13 +2016,13 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
       {/* Liste */}
       {pageRows.length === 0 ? (
         <View style={{ alignItems: "center", paddingVertical: 30, gap: 8 }}>
-          <Text style={{ fontSize: 32 }}>👥</Text>
+          <Ionicons name="people-outline" size={32} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: 13 }}>{t("admin.noClients")}</Text>
         </View>
       ) : pageRows.map((c) => (
         <TouchableOpacity key={c.id} onPress={() => openClient(c)} activeOpacity={0.7}
           style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.border }}>
-          <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>{initials(c.name, c.email)}</Text>
           </View>
           <View style={{ flex: 1 }}>
@@ -1975,20 +2030,23 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
               <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground, flexShrink: 1 }} numberOfLines={1}>{c.name ?? "—"}</Text>
               {daysSince(c.created_at) < 7 && (
                 <View style={{ backgroundColor: "rgba(74,222,128,0.18)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
-                  <Text style={{ fontSize: 8, fontWeight: "800", color: "#4ADE80" }}>{t("admin.new")}</Text>
+                  <Text style={{ fontSize: 8, fontWeight: "800", color: colors.success }}>{t("admin.new")}</Text>
                 </View>
               )}
             </View>
             <Text style={{ fontSize: 11, color: colors.muted }} numberOfLines={1}>{c.email ?? "—"}</Text>
             <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }} numberOfLines={1}>
-              📅 {fmtDate(c.created_at)} · 🕐 {fmtDate(c.last_booking_at)} · {c.favorite_venue ?? "—"}
+              {fmtDate(c.created_at)} · {fmtDate(c.last_booking_at)} · {c.favorite_venue ?? "—"}
             </Text>
           </View>
           <View style={{ alignItems: "flex-end", gap: 4 }}>
             <View style={{ backgroundColor: c.active ? "rgba(74,222,128,0.15)" : "rgba(239,68,68,0.12)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: c.active ? "#4ADE80" : "#EF4444" }}>{c.active ? t("admin.active") : t("admin.inactive")}</Text>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: c.active ? colors.success : colors.error }}>{c.active ? t("admin.active") : t("admin.inactive")}</Text>
             </View>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: colors.primary }}>{c.total_bookings} 📋</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: colors.foreground }}>{c.total_bookings}</Text>
+              <Ionicons name="list-outline" size={12} color={colors.muted} />
+            </View>
           </View>
         </TouchableOpacity>
       ))}
@@ -1996,12 +2054,12 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
       {/* Pagination */}
       {filtered.length > PAGE_SIZE && (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 10 }}>
-          <TouchableOpacity disabled={safePage === 0} onPress={() => setPage(safePage - 1)} style={{ opacity: safePage === 0 ? 0.4 : 1, padding: 8 }}>
-            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16 }}>←</Text>
+          <TouchableOpacity disabled={safePage === 0} onPress={() => setPage(safePage - 1)} accessibilityRole="button" accessibilityLabel="Précédent" style={{ opacity: safePage === 0 ? 0.4 : 1, padding: 8 }}>
+            <Ionicons name="chevron-back" size={18} color={colors.foreground} />
           </TouchableOpacity>
           <Text style={{ fontSize: 12, color: colors.muted }}>{safePage + 1} / {pageCount}</Text>
-          <TouchableOpacity disabled={safePage >= pageCount - 1} onPress={() => setPage(safePage + 1)} style={{ opacity: safePage >= pageCount - 1 ? 0.4 : 1, padding: 8 }}>
-            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16 }}>→</Text>
+          <TouchableOpacity disabled={safePage >= pageCount - 1} onPress={() => setPage(safePage + 1)} accessibilityRole="button" accessibilityLabel="Suivant" style={{ opacity: safePage >= pageCount - 1 ? 0.4 : 1, padding: 8 }}>
+            <Ionicons name="chevron-forward" size={18} color={colors.foreground} />
           </TouchableOpacity>
         </View>
       )}
@@ -2012,12 +2070,14 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
           <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: "85%", borderWidth: 1, borderColor: colors.border }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{t("admin.clientFile")}</Text>
-              <TouchableOpacity onPress={() => setSelected(null)}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setSelected(null)} accessibilityRole="button" accessibilityLabel={t("common.cancel")}>
+                <Ionicons name="close" size={22} color={colors.muted} />
+              </TouchableOpacity>
             </View>
             {selected && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 }}>
-                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(212,175,55,0.15)", alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
                     <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 18 }}>{initials(selected.name, selected.email)}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
@@ -2025,7 +2085,7 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
                       <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{selected.name ?? "—"}</Text>
                       {daysSince(selected.created_at) < 7 && (
                         <View style={{ backgroundColor: "rgba(74,222,128,0.18)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
-                          <Text style={{ fontSize: 9, fontWeight: "800", color: "#4ADE80" }}>{t("admin.new")}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: "800", color: colors.success }}>{t("admin.new")}</Text>
                         </View>
                       )}
                     </View>
@@ -2034,10 +2094,26 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
                 </View>
 
                 <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: colors.border, gap: 6 }}>
-                  {selected.phone ? <Text style={{ fontSize: 13, color: colors.foreground }}>📞 {selected.phone}</Text> : null}
-                  <Text style={{ fontSize: 13, color: colors.foreground }}>📅 {t("admin.registered")} : {fmtDate(selected.created_at)}</Text>
-                  <Text style={{ fontSize: 13, color: colors.foreground }}>🪑 {t("admin.totalBookings")} : {selected.total_bookings}</Text>
-                  {selected.favorite_venue ? <Text style={{ fontSize: 13, color: colors.foreground }}>📍 {t("admin.favoriteVenue")} : {selected.favorite_venue}</Text> : null}
+                  {selected.phone ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Ionicons name="call-outline" size={13} color={colors.muted} />
+                      <Text style={{ fontSize: 13, color: colors.foreground }}>{selected.phone}</Text>
+                    </View>
+                  ) : null}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="calendar-outline" size={13} color={colors.muted} />
+                    <Text style={{ fontSize: 13, color: colors.foreground }}>{t("admin.registered")} : {fmtDate(selected.created_at)}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="restaurant-outline" size={13} color={colors.muted} />
+                    <Text style={{ fontSize: 13, color: colors.foreground }}>{t("admin.totalBookings")} : {selected.total_bookings}</Text>
+                  </View>
+                  {selected.favorite_venue ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Ionicons name="location-outline" size={13} color={colors.muted} />
+                      <Text style={{ fontSize: 13, color: colors.foreground }}>{t("admin.favoriteVenue")} : {selected.favorite_venue}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground, marginBottom: 10 }}>{t("admin.history")}</Text>
@@ -2049,9 +2125,9 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
                   <View key={h.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.surface, borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: colors.border }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{h.venue_name}</Text>
-                      <Text style={{ fontSize: 11, color: colors.muted }}>📅 {h.date} · 🕐 {h.time}</Text>
+                      <Text style={{ fontSize: 11, color: colors.muted }}>{h.date} · {h.time}</Text>
                     </View>
-                    <View style={{ backgroundColor: "rgba(212,175,55,0.12)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <View style={{ backgroundColor: colors.background, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
                       <Text style={{ fontSize: 10, fontWeight: "700", color: colors.primary }}>{h.status}</Text>
                     </View>
                   </View>
@@ -2113,7 +2189,7 @@ export default function PartnerDashboardScreen() {
     return (
       <ScreenContainer>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-          <Text style={{ fontSize: 40 }}>🔒</Text>
+          <Ionicons name="lock-closed-outline" size={40} color={colors.muted} />
           <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, textAlign: "center" }}>
             {t("partner.loginRequired") || "Connecte-toi pour accéder au dashboard partenaire"}
           </Text>
@@ -2122,7 +2198,7 @@ export default function PartnerDashboardScreen() {
             style={{ marginTop: 8, backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 12, paddingHorizontal: 28 }}
             activeOpacity={0.8}
           >
-            <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>{t("common.login") || "Se connecter"}</Text>
+            <Text style={{ color: colors.background, fontWeight: "800", fontSize: 14 }}>{t("common.login") || "Se connecter"}</Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
@@ -2138,8 +2214,8 @@ export default function PartnerDashboardScreen() {
           paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16,
           gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border,
         }}>
-          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
-            <Text style={{ color: colors.primary, fontSize: 15 }}>←</Text>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")} accessibilityRole="button" accessibilityLabel={t("common.back")}>
+            <Ionicons name="chevron-back" size={22} color={colors.foreground} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 18, fontWeight: "800", color: colors.primary }}>{t("partner.title")}</Text>
@@ -2147,12 +2223,12 @@ export default function PartnerDashboardScreen() {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             {isDemoMode && (
-              <View style={{ backgroundColor: "rgba(212,175,55,0.15)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                <Text style={{ fontSize: 9, color: "#D4AF37", fontWeight: "700" }}>DEMO</Text>
+              <View style={{ backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ fontSize: 9, color: colors.primary, fontWeight: "700" }}>DEMO</Text>
               </View>
             )}
             <View style={{ backgroundColor: "rgba(74,222,128,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4ADE80" }}>{t("partner.online")}</Text>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.success }}>{t("partner.online")}</Text>
             </View>
           </View>
         </View>
@@ -2176,8 +2252,8 @@ export default function PartnerDashboardScreen() {
                 gap: 3,
               }}
             >
-              <Text style={{ fontSize: 14 }}>{tab.icon}</Text>
-              <Text style={{ fontSize: 9, fontWeight: "700", color: activeTab === tab.id ? "#0A0E13" : colors.muted }}>
+              <Ionicons name={iconFor(tab.icon)} size={16} color={activeTab === tab.id ? colors.background : colors.muted} />
+              <Text style={{ fontSize: 9, fontWeight: "700", color: activeTab === tab.id ? colors.background : colors.muted }}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
