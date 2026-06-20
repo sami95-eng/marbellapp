@@ -13,6 +13,7 @@ import { getVenueImage } from "@/constants/venue-images";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "@/components/language-selector";
 import { useFeaturedVenues } from "@/hooks/use-venues";
+import { categoryColorById, categoryColorByName } from "@/constants/category-colors";
 import type { Venue } from "@/lib/venues-service";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -49,7 +50,7 @@ export default function HomeScreen() {
           backgroundColor: colors.surface, borderRadius: 18, padding: 16,
           alignItems: "center", borderWidth: 1, borderColor: colors.border,
         }}>
-          <Ionicons name={item.icon} size={28} color={colors.foreground} style={{ marginBottom: 10 }} />
+          <Ionicons name={item.icon} size={28} color={categoryColorById(item.id)} style={{ marginBottom: 10 }} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: colors.foreground, textAlign: "center" }}>
             {item.name}
           </Text>
@@ -102,7 +103,7 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 15, fontWeight: "800", color: colors.foreground }} numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600" }}>
+              <Text style={{ fontSize: 11, color: categoryColorByName(item.category), fontWeight: "600" }}>
                 {item.category}
               </Text>
               <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }} numberOfLines={2}>

@@ -13,6 +13,7 @@ import { getVenueImage } from "@/constants/venue-images";
 import { DEFAULT_OFFERS } from "@/lib/venues-service";
 import { getVenueRatings, type RatingWithUser } from "@/lib/ratings-service";
 import { useColors } from "@/hooks/use-colors";
+import { categoryColorByName } from "@/constants/category-colors";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -139,6 +140,7 @@ export default function VenueDetailScreen() {
 
   const icon = CATEGORY_ICONS[venue.category] ?? "✨";
   const categoryIcon = CATEGORY_IONICONS[venue.category] ?? "sparkles-outline";
+  const categoryColor = categoryColorByName(venue.category);
 
   // Carousel images — deduplicated
   const seen = new Set<string>();
@@ -249,11 +251,11 @@ export default function VenueDetailScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <View style={{
                 flexDirection: "row", alignItems: "center", gap: 6,
-                backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-                borderWidth: 1, borderColor: colors.border,
+                backgroundColor: categoryColor + "1A", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+                borderWidth: 1, borderColor: categoryColor + "40",
               }}>
-                <Ionicons name={categoryIcon} size={13} color={colors.muted} />
-                <Text style={{ fontSize: 12, color: colors.muted, fontWeight: "600" }}>
+                <Ionicons name={categoryIcon} size={13} color={categoryColor} />
+                <Text style={{ fontSize: 12, color: categoryColor, fontWeight: "600" }}>
                   {venue.category}
                 </Text>
               </View>
