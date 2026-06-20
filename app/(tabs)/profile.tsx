@@ -37,6 +37,7 @@ export default function ProfileScreen() {
   const [postUrl, setPostUrl] = useState("");
   const [igHandle, setIgHandle] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const urlValid = postUrl.trim().toLowerCase().includes("instagram.com");
 
   const reloadVip = () => {
     if (!user?.id) { setVipStatus(null); return; }
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const vipNotify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
   const handleSubmitPost = async () => {
     if (!postUrl.trim()) { vipNotify("Colle l'URL de ton post Instagram."); return; }
+    if (!urlValid) { vipNotify("L'URL doit être un lien Instagram (contenir « instagram.com »)."); return; }
     if (!agreed) { vipNotify("Coche la case confirmant que tu as respecté les conditions."); return; }
     setSubmitting(true);
     try {
@@ -376,7 +378,16 @@ export default function ProfileScreen() {
             {/* Conditions */}
             <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 4 }}>
               <Text style={{ fontSize: 12, color: colors.foreground, fontWeight: "700", marginBottom: 2 }}>Conditions à respecter</Text>
-              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>1. Suivez @marbellapp sur Instagram</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>
+                1. Suivez{" "}
+                <Text
+                  style={{ color: colors.primary, fontWeight: "700" }}
+                  onPress={() => Linking.openURL("https://www.instagram.com/marbellapp").catch(() => {})}
+                >
+                  @marbellapp
+                </Text>
+                {" "}sur Instagram
+              </Text>
               <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>2. Postez avec #marbellappvip</Text>
               <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>3. Votre compte Instagram doit être public</Text>
               <TouchableOpacity
@@ -412,16 +423,19 @@ export default function ProfileScreen() {
             <View>
               <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>URL DU POST *</Text>
               <TextInput value={postUrl} onChangeText={setPostUrl} placeholder="https://instagram.com/p/..." placeholderTextColor="#555" autoCapitalize="none"
-                style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+                style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: (postUrl.trim() && !urlValid) ? "#EF4444" : colors.border }} />
+              {postUrl.trim() && !urlValid ? (
+                <Text style={{ fontSize: 11, color: "#EF4444", marginTop: 4 }}>Le lien doit contenir « instagram.com ».</Text>
+              ) : null}
             </View>
             <View>
               <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>@INSTAGRAM</Text>
               <TextInput value={igHandle} onChangeText={setIgHandle} placeholder="@ton_compte" placeholderTextColor="#555" autoCapitalize="none"
                 style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
             </View>
-            <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !postUrl.trim() || !agreed} activeOpacity={0.85}
-              style={{ backgroundColor: (postUrl.trim() && agreed) ? colors.primary : "#333", borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
-              {submitting ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: (postUrl.trim() && agreed) ? "#0A0E13" : "#777", fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+            <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !urlValid || !agreed} activeOpacity={0.85}
+              style={{ backgroundColor: (urlValid && agreed) ? colors.primary : "#333", borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
+              {submitting ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: (urlValid && agreed) ? "#0A0E13" : "#777", fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
             </TouchableOpacity>
           </View>
         </View>
