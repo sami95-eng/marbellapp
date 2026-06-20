@@ -375,21 +375,32 @@ export default function ProfileScreen() {
               <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Soumettre un post</Text>
               <TouchableOpacity onPress={() => setShowSubmit(false)}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
             </View>
+            {/* Mini-tuto */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.foreground }}>Comment gagner des points VIP ?</Text>
+              {[
+                { n: "1", text: "📸 Publie une photo sur Instagram depuis Marbella avec #marbellappvip dans la légende" },
+                { n: "2", text: "🔗 Pour copier le lien du post : ouvre le post → appuie sur ••• (3 points) en haut à droite → « Copier le lien »" },
+                { n: "3", text: "📋 Colle le lien ci-dessous et envoie" },
+              ].map((s) => (
+                <View key={s.n} style={{
+                  flexDirection: "row", gap: 10, alignItems: "flex-start",
+                  backgroundColor: "rgba(212,175,55,0.08)", borderRadius: 12, padding: 10,
+                  borderWidth: 1, borderColor: "rgba(212,175,55,0.2)",
+                }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 12 }}>{s.n}</Text>
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 12, color: colors.foreground, lineHeight: 17 }}>{s.text}</Text>
+                </View>
+              ))}
+            </View>
+
             {/* Conditions */}
             <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 4 }}>
               <Text style={{ fontSize: 12, color: colors.foreground, fontWeight: "700", marginBottom: 2 }}>Conditions à respecter</Text>
-              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>
-                1. Suivez{" "}
-                <Text
-                  style={{ color: colors.primary, fontWeight: "700" }}
-                  onPress={() => Linking.openURL("https://www.instagram.com/marbellapp").catch(() => {})}
-                >
-                  @marbellapp
-                </Text>
-                {" "}sur Instagram
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>2. Postez avec #marbellappvip</Text>
-              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>3. Votre compte Instagram doit être public</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>1. Postez avec #marbellappvip</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>2. Votre compte Instagram doit être public</Text>
               <TouchableOpacity
                 onPress={() => Linking.openURL("https://www.instagram.com/marbellapp").catch(() => {})}
                 activeOpacity={0.7}
