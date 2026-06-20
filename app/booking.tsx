@@ -7,6 +7,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
+import { useColors } from "@/hooks/use-colors";
 import { useVenueTables } from "@/hooks/use-tables";
 import { useDemo } from "@/lib/demo-context";
 import { DEMO_TABLES } from "@/constants/demo-data";
@@ -16,6 +18,8 @@ import { supabase } from "@/lib/supabase";
 import { createBooking } from "@/lib/bookings-service";
 import { getAvailableSlots, bookSlot, releaseSlot, type AvailabilitySlot } from "@/lib/availability-service";
 import { getUserVipStatus } from "@/lib/vip-service";
+
+type IoniconName = keyof typeof Ionicons.glyphMap;
 
 // Le date-picker natif ne supporte pas le web : on ne le charge que sur natif
 // (le require n'est jamais exécuté sur web → aucun crash de bundle).
@@ -57,6 +61,7 @@ function TableCard({
   onSelect: () => void;
 }) {
   const { t } = useTranslation();
+  const colors = useColors();
 
   if (!table) {
     return (
@@ -65,19 +70,19 @@ function TableCard({
         activeOpacity={0.8}
         style={{
           width: 130, marginRight: 10,
-          backgroundColor: selected ? "rgba(212,175,55,0.15)" : "#111120",
+          backgroundColor: colors.surface,
           borderRadius: 14, padding: 14,
           borderWidth: selected ? 1.5 : 1,
-          borderColor: selected ? "#D4AF37" : "rgba(212,175,55,0.2)",
+          borderColor: selected ? colors.primary : colors.border,
           alignItems: "center", justifyContent: "center",
           height: 150,
         }}
       >
-        <Text style={{ fontSize: 32, marginBottom: 8 }}>🎲</Text>
-        <Text style={{ color: selected ? "#D4AF37" : "#888", fontWeight: "700", fontSize: 12, textAlign: "center" }}>
+        <Ionicons name="shuffle-outline" size={28} color={selected ? colors.primary : colors.muted} style={{ marginBottom: 8 }} />
+        <Text style={{ color: selected ? colors.primary : colors.foreground, fontWeight: "700", fontSize: 12, textAlign: "center" }}>
           {t("booking.noPreference")}
         </Text>
-        <Text style={{ color: "#555", fontSize: 10, textAlign: "center", marginTop: 4 }}>
+        <Text style={{ color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 4 }}>
           {t("booking.noPreferenceDesc")}
         </Text>
       </TouchableOpacity>
@@ -90,10 +95,10 @@ function TableCard({
       activeOpacity={0.8}
       style={{
         width: 160, marginRight: 10,
-        backgroundColor: "#111120",
+        backgroundColor: colors.surface,
         borderRadius: 14, overflow: "hidden",
         borderWidth: selected ? 2 : 1,
-        borderColor: selected ? "#D4AF37" : "rgba(212,175,55,0.2)",
+        borderColor: selected ? colors.primary : colors.border,
         height: 195,
       }}
     >
@@ -107,17 +112,18 @@ function TableCard({
             transition={300}
           />
         ) : (
-          <View style={{ flex: 1, backgroundColor: "#1a1a2e", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 30 }}>🪑</Text>
+          <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="image-outline" size={28} color={colors.muted} />
           </View>
         )}
         {table.is_vip && (
           <View style={{
             position: "absolute", top: 6, right: 6,
-            backgroundColor: "rgba(212,175,55,0.92)",
+            backgroundColor: "rgba(10,14,19,0.55)",
+            borderWidth: 1, borderColor: colors.primary,
             borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2,
           }}>
-            <Text style={{ fontSize: 9, fontWeight: "800", color: "#0a0a0f" }}>VIP</Text>
+            <Text style={{ fontSize: 9, fontWeight: "800", color: colors.primary }}>VIP</Text>
           </View>
         )}
         {selected && (
@@ -126,24 +132,27 @@ function TableCard({
             backgroundColor: "rgba(212,175,55,0.15)",
             alignItems: "center", justifyContent: "center",
           }}>
-            <Text style={{ fontSize: 24 }}>✓</Text>
+            <Ionicons name="checkmark-circle" size={26} color={colors.primary} />
           </View>
         )}
       </View>
 
       {/* Info */}
       <View style={{ padding: 10, gap: 3 }}>
-        <Text style={{ color: "#e8e8e8", fontWeight: "700", fontSize: 12 }} numberOfLines={1}>
+        <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 12 }} numberOfLines={1}>
           {table.name}
         </Text>
-        <Text style={{ color: "#888", fontSize: 10 }}>
-          👥 {table.capacity_min}–{table.capacity_max} guests
-        </Text>
-        <Text style={{ color: "#D4AF37", fontWeight: "700", fontSize: 11, marginTop: 2 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Ionicons name="people-outline" size={11} color={colors.muted} />
+          <Text style={{ color: colors.muted, fontSize: 10 }}>
+            {table.capacity_min}–{table.capacity_max} guests
+          </Text>
+        </View>
+        <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 11, marginTop: 2 }}>
           From €{table.price_min.toLocaleString()}
         </Text>
         {table.description && (
-          <Text style={{ color: "#555", fontSize: 9, lineHeight: 13, marginTop: 2 }} numberOfLines={2}>
+          <Text style={{ color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 2 }} numberOfLines={2}>
             {table.description}
           </Text>
         )}
@@ -173,6 +182,31 @@ export default function BookingScreen() {
   const router = useRouter();
   const { isDemoMode } = useDemo();
   const { user } = useAuth();
+  const colors = useColors();
+
+  const cardStyle = {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  } as const;
+  const labelStyle = {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    color: colors.muted,
+    letterSpacing: 1,
+    marginBottom: 8,
+  };
+  const inputStyle = { fontSize: 15, color: colors.foreground };
+  const stepperBtn = {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  };
 
   // Table data
   const { data: supabaseTables, loading: tablesLoading } = useVenueTables(
@@ -440,28 +474,28 @@ export default function BookingScreen() {
         {/* Header */}
         <View style={{ marginBottom: 20, paddingTop: 4 }}>
           <TouchableOpacity onPress={goBack} activeOpacity={0.6} style={{ marginBottom: 16, alignSelf: "flex-start" }}>
-            <Text style={{ color: "#D4AF37", fontSize: 15, fontWeight: "600" }}>{t("common.back")}</Text>
+            <Text style={{ color: colors.muted, fontSize: 15, fontWeight: "600" }}>{t("common.back")}</Text>
           </TouchableOpacity>
-          <Text style={{ fontSize: 28, fontWeight: "800", color: "#e8e8e8" }}>{t("booking.title")}</Text>
-          <Text style={{ fontSize: 13, color: "#888", marginTop: 6 }}>{t("booking.subtitle")}</Text>
+          <Text style={{ fontSize: 28, fontWeight: "800", color: colors.foreground }}>{t("booking.title")}</Text>
+          <Text style={{ fontSize: 13, color: colors.muted, marginTop: 6 }}>{t("booking.subtitle")}</Text>
         </View>
 
         {/* ── Table Selection ─────────────────────────────────────── */}
         <View style={{ marginBottom: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#888", letterSpacing: 1 }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.muted, letterSpacing: 1 }}>
               {t("booking.selectTable")}
             </Text>
             {selectedTable !== undefined && (
               <TouchableOpacity onPress={() => setSelectedTable(undefined)}>
-                <Text style={{ fontSize: 11, color: "#D4AF37" }}>{t("booking.clearTable")}</Text>
+                <Text style={{ fontSize: 11, color: colors.muted }}>{t("booking.clearTable")}</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {tablesLoading && !isDemoMode ? (
             <View style={{ height: 195, justifyContent: "center", alignItems: "center" }}>
-              <ActivityIndicator color="#D4AF37" />
+              <ActivityIndicator color={colors.muted} />
             </View>
           ) : (
             <FlatList
@@ -487,25 +521,26 @@ export default function BookingScreen() {
           {/* Selected table summary */}
           {selectedTable !== undefined && selectedTable !== null && (
             <View style={{
-              marginTop: 10, backgroundColor: "rgba(212,175,55,0.08)",
+              marginTop: 10, backgroundColor: colors.surface,
               borderRadius: 12, padding: 12,
-              borderWidth: 1, borderColor: "rgba(212,175,55,0.25)",
+              borderWidth: 1, borderColor: colors.border,
               flexDirection: "row", alignItems: "center", gap: 10,
             }}>
-              <Text style={{ fontSize: 18 }}>🪑</Text>
+              <Ionicons name="restaurant-outline" size={18} color={colors.muted} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: "#D4AF37", fontWeight: "700", fontSize: 13 }}>
+                <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 13 }}>
                   {selectedTable.name}
                 </Text>
-                <Text style={{ color: "#888", fontSize: 11, marginTop: 2 }}>
-                  👥 {selectedTable.capacity_min}–{selectedTable.capacity_max} guests
-                  {" · "}
-                  From €{selectedTable.price_min.toLocaleString()}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <Ionicons name="people-outline" size={11} color={colors.muted} />
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>
+                    {selectedTable.capacity_min}–{selectedTable.capacity_max} guests · From €{selectedTable.price_min.toLocaleString()}
+                  </Text>
+                </View>
               </View>
               {selectedTable.is_vip && (
-                <View style={{ backgroundColor: "rgba(212,175,55,0.2)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontSize: 10, color: "#D4AF37", fontWeight: "700" }}>VIP</Text>
+                <View style={{ backgroundColor: "rgba(10,14,19,0.55)", borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>VIP</Text>
                 </View>
               )}
             </View>
@@ -525,7 +560,7 @@ export default function BookingScreen() {
               onChange={(e: any) => setDate(e.target.value)}
               style={{
                 fontSize: 15,
-                color: "#e8e8e8",
+                color: colors.foreground,
                 background: "transparent",
                 border: "none",
                 outline: "none",
@@ -536,7 +571,7 @@ export default function BookingScreen() {
           ) : (
             <>
               <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-                <Text style={{ fontSize: 15, color: "#e8e8e8" }}>{formatDisplayDate(date)}</Text>
+                <Text style={{ fontSize: 15, color: colors.foreground }}>{formatDisplayDate(date)}</Text>
               </TouchableOpacity>
               {showDatePicker && DateTimePicker && (
                 <DateTimePicker
@@ -561,10 +596,10 @@ export default function BookingScreen() {
             <Text style={labelStyle}>{t("booking.availableSlots")}</Text>
             {slotsLoading ? (
               <View style={{ height: 44, justifyContent: "center" }}>
-                <ActivityIndicator color="#D4AF37" />
+                <ActivityIndicator color={colors.muted} />
               </View>
             ) : slots.length === 0 ? (
-              <Text style={{ fontSize: 12, color: "#666", lineHeight: 18 }}>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>
                 {t("booking.noSlots")}
               </Text>
             ) : (
@@ -579,13 +614,13 @@ export default function BookingScreen() {
                       activeOpacity={0.8}
                       style={{
                         paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
-                        backgroundColor: sel ? "#D4AF37" : "#1a1a2e",
-                        borderWidth: 1, borderColor: sel ? "#D4AF37" : "rgba(212,175,55,0.25)",
+                        backgroundColor: sel ? colors.primary : colors.surface,
+                        borderWidth: 1, borderColor: sel ? colors.primary : colors.border,
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: sel ? "#0a0a0f" : "#e8e8e8", fontWeight: "800", fontSize: 14 }}>{s.time}</Text>
-                      <Text style={{ color: sel ? "#0a0a0f" : "#888", fontSize: 9, marginTop: 2 }}>
+                      <Text style={{ color: sel ? colors.background : colors.foreground, fontWeight: "800", fontSize: 14 }}>{s.time}</Text>
+                      <Text style={{ color: sel ? colors.background : colors.muted, fontSize: 9, marginTop: 2 }}>
                         {left} {t("booking.slotsLeft")}
                       </Text>
                     </TouchableOpacity>
@@ -604,7 +639,7 @@ export default function BookingScreen() {
               value={time}
               onChangeText={setTime}
               placeholder="HH:MM"
-              placeholderTextColor="#555"
+              placeholderTextColor={colors.muted}
               style={inputStyle}
             />
           </View>
@@ -614,7 +649,7 @@ export default function BookingScreen() {
         <View style={cardStyle}>
           <Text style={labelStyle}>{t("booking.guests")}</Text>
           {selectedTable && (
-            <Text style={{ fontSize: 10, color: "#888", marginBottom: 8 }}>
+            <Text style={{ fontSize: 10, color: colors.muted, marginBottom: 8 }}>
               {selectedTable.capacity_min}–{selectedTable.capacity_max} guests for {selectedTable.name}
             </Text>
           )}
@@ -627,9 +662,9 @@ export default function BookingScreen() {
               activeOpacity={0.8}
               style={stepperBtn}
             >
-              <Text style={{ color: "#0a0a0f", fontSize: 20, fontWeight: "700", lineHeight: 24 }}>−</Text>
+              <Text style={{ color: colors.foreground, fontSize: 20, fontWeight: "700", lineHeight: 24 }}>−</Text>
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#e8e8e8", flex: 1, textAlign: "center" }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, flex: 1, textAlign: "center" }}>
               {guests}
             </Text>
             <TouchableOpacity
@@ -640,7 +675,7 @@ export default function BookingScreen() {
               activeOpacity={0.8}
               style={stepperBtn}
             >
-              <Text style={{ color: "#0a0a0f", fontSize: 20, fontWeight: "700", lineHeight: 24 }}>+</Text>
+              <Text style={{ color: colors.foreground, fontSize: 20, fontWeight: "700", lineHeight: 24 }}>+</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -648,13 +683,13 @@ export default function BookingScreen() {
         {/* ── Phone (required) ────────────────────────────────────── */}
         <View style={cardStyle}>
           <Text style={labelStyle}>
-            {t("booking.phone")} <Text style={{ color: "#D4AF37" }}>*</Text>
+            {t("booking.phone")} <Text style={{ color: colors.primary }}>*</Text>
           </Text>
           <TextInput
             value={phone}
             onChangeText={setPhone}
             placeholder={t("booking.phonePlaceholder")}
-            placeholderTextColor="#555"
+            placeholderTextColor={colors.muted}
             keyboardType="phone-pad"
             style={inputStyle}
           />
@@ -667,7 +702,7 @@ export default function BookingScreen() {
             value={notes}
             onChangeText={setNotes}
             placeholder={t("booking.notesPlaceholder")}
-            placeholderTextColor="#555"
+            placeholderTextColor={colors.muted}
             multiline
             numberOfLines={3}
             style={[inputStyle, { height: 80, textAlignVertical: "top" }]}
@@ -678,24 +713,24 @@ export default function BookingScreen() {
         <View style={[cardStyle, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
           <View style={{ flex: 1 }}>
             <Text style={labelStyle}>{t("booking.total") || "TOTAL À PAYER"}</Text>
-            <Text style={{ fontSize: 11, color: "#666" }}>
+            <Text style={{ fontSize: 11, color: colors.muted }}>
               {payable
                 ? (selectedTable ? `Table · ${selectedTable.name}` : "Prix moyen indicatif")
                 : "Paiement non requis"}
             </Text>
             {baseCents != null && vipDiscountPct > 0 ? (
-              <Text style={{ fontSize: 11, color: "#4ADE80", fontWeight: "700", marginTop: 4 }}>
+              <Text style={{ fontSize: 11, color: colors.success, fontWeight: "700", marginTop: 4 }}>
                 Réduction VIP {vipTierLabel} −{vipDiscountPct}%
               </Text>
             ) : null}
           </View>
           <View style={{ alignItems: "flex-end" }}>
             {baseCents != null && vipDiscountPct > 0 ? (
-              <Text style={{ fontSize: 12, color: "#666", textDecorationLine: "line-through" }}>
+              <Text style={{ fontSize: 12, color: colors.muted, textDecorationLine: "line-through" }}>
                 {formatEur(baseCents)}
               </Text>
             ) : null}
-            <Text style={{ fontSize: 22, fontWeight: "800", color: "#D4AF37" }}>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary }}>
               {amountCents != null ? formatEur(amountCents) : "Prix sur demande"}
             </Text>
           </View>
@@ -703,7 +738,7 @@ export default function BookingScreen() {
 
         {/* ── Terms ───────────────────────────────────────────────── */}
         <View style={[cardStyle, { marginBottom: 28 }]}>
-          <Text style={{ fontSize: 12, color: "#666", lineHeight: 18 }}>{t("booking.terms")}</Text>
+          <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>{t("booking.terms")}</Text>
         </View>
 
         {/* ── Confirm & pay ───────────────────────────────────────── */}
@@ -712,15 +747,15 @@ export default function BookingScreen() {
           disabled={isSubmitting}
           activeOpacity={0.8}
           style={{
-            backgroundColor: isSubmitting ? "#555" : "#D4AF37",
+            backgroundColor: isSubmitting ? colors.muted : colors.primary,
             borderRadius: 50, paddingVertical: 16,
             alignItems: "center", marginBottom: 32,
           }}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="#0a0a0f" />
+            <ActivityIndicator color={colors.background} />
           ) : (
-            <Text style={{ color: "#0a0a0f", fontWeight: "800", fontSize: 16 }}>
+            <Text style={{ color: colors.background, fontWeight: "800", fontSize: 16 }}>
               {amountCents != null
                 ? `${t("booking.confirmAndPay") || "Confirmer et payer"} · ${formatEur(amountCents)}`
                 : (t("booking.confirmBtn") || "Confirmer la réservation")}
@@ -731,29 +766,3 @@ export default function BookingScreen() {
     </ScreenContainer>
   );
 }
-
-const cardStyle = {
-  backgroundColor: "#111120",
-  borderRadius: 16,
-  padding: 16,
-  marginBottom: 12,
-  borderWidth: 1,
-  borderColor: "rgba(212,175,55,0.15)",
-} as const;
-
-const labelStyle = {
-  fontSize: 11,
-  fontWeight: "700" as const,
-  color: "#888",
-  letterSpacing: 1,
-  marginBottom: 8,
-};
-
-const inputStyle = { fontSize: 15, color: "#e8e8e8" };
-
-const stepperBtn = {
-  width: 40, height: 40, borderRadius: 20,
-  backgroundColor: "#D4AF37",
-  alignItems: "center" as const,
-  justifyContent: "center" as const,
-};
