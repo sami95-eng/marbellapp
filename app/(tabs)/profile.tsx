@@ -201,7 +201,7 @@ export default function ProfileScreen() {
             onPress={() => router.push("/edit-profile")}
             style={{ marginTop: 16, backgroundColor: colors.primary, paddingHorizontal: 28, paddingVertical: 10, borderRadius: 12 }}
           >
-            <Text style={{ color: colors.background, fontWeight: "700", fontSize: 13 }}>{t("profile.editProfile")}</Text>
+            <Text style={{ color: colors.onPrimary, fontWeight: "700", fontSize: 13 }}>{t("profile.editProfile")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -401,7 +401,7 @@ export default function ProfileScreen() {
                   borderWidth: 1, borderColor: colors.border,
                 }}>
                   <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: colors.background, fontWeight: "800", fontSize: 12 }}>{s.n}</Text>
+                    <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 12 }}>{s.n}</Text>
                   </View>
                   <Text style={{ flex: 1, fontSize: 12, color: colors.foreground, lineHeight: 17 }}>{s.text}</Text>
                 </View>
@@ -437,7 +437,7 @@ export default function ProfileScreen() {
                 backgroundColor: agreed ? colors.primary : "transparent",
                 alignItems: "center", justifyContent: "center",
               }}>
-                {agreed ? <Ionicons name="checkmark" size={14} color={colors.background} /> : null}
+                {agreed ? <Ionicons name="checkmark" size={14} color={colors.onPrimary} /> : null}
               </View>
               <Text style={{ fontSize: 13, color: colors.foreground, flex: 1 }}>
                 J'ai respecté toutes les conditions
@@ -459,7 +459,7 @@ export default function ProfileScreen() {
             </View>
             <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !urlValid || !agreed} activeOpacity={0.85}
               style={{ backgroundColor: (urlValid && agreed) ? colors.primary : colors.surface, borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
-              {submitting ? <ActivityIndicator color={colors.background} /> : <Text style={{ color: (urlValid && agreed) ? colors.background : colors.muted, fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+              {submitting ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={{ color: (urlValid && agreed) ? colors.onPrimary : colors.muted, fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
             </TouchableOpacity>
           </View>
         </View>

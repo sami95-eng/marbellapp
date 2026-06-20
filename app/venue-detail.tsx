@@ -130,7 +130,7 @@ export default function VenueDetailScreen() {
             style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 50 }}
             activeOpacity={0.7}
           >
-            <Text style={{ color: colors.background, fontWeight: "700" }}>Retour</Text>
+            <Text style={{ color: colors.onPrimary, fontWeight: "700" }}>Retour</Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
@@ -236,7 +236,7 @@ export default function VenueDetailScreen() {
               </Text>
               <View style={{ alignItems: "flex-end", marginLeft: 8, marginTop: 4 }}>
                 <View style={{ backgroundColor: colors.primary, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5 }}>
-                  <Text style={{ color: colors.background, fontWeight: "800", fontSize: 14 }}>
+                  <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 14 }}>
                     ★ {Number((venue.rating_count ?? 0) > 0 ? (venue.rating_avg ?? 0) : venue.rating).toFixed(1)}
                   </Text>
                 </View>
@@ -411,7 +411,7 @@ export default function VenueDetailScreen() {
               style={{ backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 16, alignItems: "center" }}
               activeOpacity={0.8}
             >
-              <Text style={{ color: colors.background, fontWeight: "800", fontSize: 16 }}>Réserver une expérience VIP</Text>
+              <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 16 }}>Réserver une expérience VIP</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleShare}

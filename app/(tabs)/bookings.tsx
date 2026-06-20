@@ -341,8 +341,8 @@ function RatingModal({
                 }}
               >
                 {saving
-                  ? <ActivityIndicator color={colors.background} />
-                  : <Text style={{ color: score >= 1 ? colors.background : colors.muted, fontWeight: "800", fontSize: 15 }}>
+                  ? <ActivityIndicator color={colors.onPrimary} />
+                  : <Text style={{ color: score >= 1 ? colors.onPrimary : colors.muted, fontWeight: "800", fontSize: 15 }}>
                       {t("common.send") || "Envoyer"}
                     </Text>}
               </TouchableOpacity>
@@ -498,7 +498,7 @@ export default function BookingsScreen() {
               >
                 <Text style={{
                   fontSize: 13, fontWeight: isActive ? "700" : "500",
-                  color: isActive ? colors.background : colors.muted,
+                  color: isActive ? colors.onPrimary : colors.muted,
                 }}>
                   {tab === "upcoming" ? t("bookings.tabUpcoming")
                    : tab === "past"   ? t("bookings.tabPast")
@@ -524,7 +524,7 @@ export default function BookingsScreen() {
             <TouchableOpacity onPress={refetch} activeOpacity={0.7}
               accessibilityRole="button" accessibilityLabel={t("common.retry")}
               style={{ backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 }}>
-              <Text style={{ color: colors.background, fontWeight: "700" }}>{t("common.retry")}</Text>
+              <Text style={{ color: colors.onPrimary, fontWeight: "700" }}>{t("common.retry")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -558,7 +558,7 @@ export default function BookingsScreen() {
               activeOpacity={0.7}
               style={{ marginTop: 20, backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
             >
-              <Text style={{ color: colors.background, fontWeight: "700", fontSize: 14 }}>
+              <Text style={{ color: colors.onPrimary, fontWeight: "700", fontSize: 14 }}>
                 {t("bookings.exploreVenues")}
               </Text>
             </TouchableOpacity>

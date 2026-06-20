@@ -243,7 +243,7 @@ export default function HomeScreen() {
                     paddingHorizontal: 24, paddingVertical: 11,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.background }}>
+                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.onPrimary }}>
                     {t("common.retry")}
                   </Text>
                 </TouchableOpacity>
@@ -321,7 +321,7 @@ export default function HomeScreen() {
                     alignItems: "center", alignSelf: "flex-start", paddingHorizontal: 28,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.background }}>
+                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.onPrimary }}>
                     {t("home.becomePartner")}
                   </Text>
                 </TouchableOpacity>

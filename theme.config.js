@@ -2,6 +2,7 @@
 const themeColors = {
   // Marbell'app - Luxury Dark Mode Brand Colors
   primary: { light: '#D4AF37', dark: '#D4AF37' }, // Gold - signature accent
+  onPrimary: { light: '#0A0E13', dark: '#0A0E13' }, // Ink text/icons on gold — constant in both modes
   background: { light: '#F5F1E8', dark: '#0A0E13' }, // Cream / Deep Black-Navy
   surface: { light: '#FFFFFF', dark: '#141A22' }, // White / Dark Navy Surface
   foreground: { light: '#0F1419', dark: '#F8F4EC' }, // Deep Navy / Warm Cream

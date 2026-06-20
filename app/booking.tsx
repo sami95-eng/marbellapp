@@ -619,8 +619,8 @@ export default function BookingScreen() {
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: sel ? colors.background : colors.foreground, fontWeight: "800", fontSize: 14 }}>{s.time}</Text>
-                      <Text style={{ color: sel ? colors.background : colors.muted, fontSize: 9, marginTop: 2 }}>
+                      <Text style={{ color: sel ? colors.onPrimary : colors.foreground, fontWeight: "800", fontSize: 14 }}>{s.time}</Text>
+                      <Text style={{ color: sel ? colors.onPrimary : colors.muted, fontSize: 9, marginTop: 2 }}>
                         {left} {t("booking.slotsLeft")}
                       </Text>
                     </TouchableOpacity>
@@ -753,9 +753,9 @@ export default function BookingScreen() {
           }}
         >
           {isSubmitting ? (
-            <ActivityIndicator color={colors.background} />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
-            <Text style={{ color: colors.background, fontWeight: "800", fontSize: 16 }}>
+            <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 16 }}>
               {amountCents != null
                 ? `${t("booking.confirmAndPay") || "Confirmer et payer"} · ${formatEur(amountCents)}`
                 : (t("booking.confirmBtn") || "Confirmer la réservation")}
