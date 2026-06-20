@@ -1,5 +1,5 @@
 import {
-  ScrollView, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform,
+  ScrollView, Text, View, TouchableOpacity, FlatList, Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -8,7 +8,7 @@ import { useState } from "react";
 import { GlobalSearch } from "@/components/global-search";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeInRight, FadeInUp } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInRight, FadeInUp, useReducedMotion } from "react-native-reanimated";
 import { getVenueImage } from "@/constants/venue-images";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "@/components/language-selector";
@@ -23,8 +23,9 @@ export default function HomeScreen() {
   const colors = useColors();
   const [searchVisible, setSearchVisible] = useState(false);
 
-  const { data: featuredVenues, loading: venuesLoading } = useFeaturedVenues(6);
-  const isWeb = Platform.OS === "web";
+  const { data: featuredVenues, loading: venuesLoading, error: venuesError, refetch: refetchVenues } = useFeaturedVenues(6);
+  const reduceMotion = useReducedMotion();
+  const noAnim = Platform.OS === "web" || reduceMotion;
 
   const CATEGORIES: { id: string; icon: IoniconName; name: string; description: string }[] = [
     { id: "beach-clubs", icon: "umbrella-outline",   name: t("cat.beachClubs"), description: t("cat.beachClubsDesc") },
@@ -32,12 +33,12 @@ export default function HomeScreen() {
     { id: "spas",        icon: "leaf-outline",       name: t("cat.spas"),       description: t("cat.spasDesc") },
     { id: "nightlife",   icon: "wine-outline",       name: t("cat.nightlife"),  description: t("cat.nightlifeDesc") },
     { id: "events",      icon: "sparkles-outline",   name: t("cat.events"),     description: t("cat.eventsDesc") },
-    { id: "shopping",    icon: "bag-handle-outline", name: t("cat.shopping"),   description: t("cat.shoppingDesc") },
+    { id: "shopping",    icon: "boat-outline",       name: t("cat.shopping"),   description: t("cat.shoppingDesc") },
   ];
 
   const renderCategoryItem = ({ item, index }: { item: typeof CATEGORIES[0]; index: number }) => (
     <Animated.View
-      entering={isWeb ? undefined : FadeInUp.delay(180 + index * 70).springify().damping(14)}
+      entering={noAnim ? undefined : FadeInUp.delay(180 + index * 70).springify().damping(14)}
       style={{ flex: 1, marginHorizontal: 5, marginBottom: 10 }}
     >
       <TouchableOpacity
@@ -64,7 +65,7 @@ export default function HomeScreen() {
     const imageUrl = item.cover_image_url || getVenueImage(item.slug, item.category);
     return (
       <Animated.View
-        entering={isWeb ? undefined : FadeInRight.delay(100 + index * 90).springify().damping(16)}
+        entering={noAnim ? undefined : FadeInRight.delay(100 + index * 90).springify().damping(16)}
         style={{ marginRight: 14 }}
       >
         <TouchableOpacity
@@ -108,7 +109,7 @@ export default function HomeScreen() {
                 {item.description ?? ""}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
-                <Text style={{ color: "#F59E0B", fontSize: 13, fontWeight: "800" }}>
+                <Text style={{ color: colors.warning, fontSize: 13, fontWeight: "800" }}>
                   {"★".repeat(Math.round(item.rating))}
                 </Text>
                 <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "700", marginLeft: 6 }}>
@@ -136,7 +137,7 @@ export default function HomeScreen() {
 
           {/* Header */}
           <Animated.View
-            entering={isWeb ? undefined : FadeInDown.delay(0).duration(500)}
+            entering={noAnim ? undefined : FadeInDown.delay(0).duration(500)}
             style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -153,12 +154,14 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   onPress={() => router.push("/map")}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("home.openMap")}
                   style={{
                     backgroundColor: colors.surface, borderRadius: 14,
                     padding: 11, borderWidth: 1, borderColor: colors.border,
                   }}
                 >
-                  <Text style={{ fontSize: 22 }}>🗺️</Text>
+                  <Ionicons name="map-outline" size={22} color={colors.foreground} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -166,19 +169,21 @@ export default function HomeScreen() {
 
           {/* Search bar */}
           <Animated.View
-            entering={isWeb ? undefined : FadeInDown.delay(80).duration(500)}
+            entering={noAnim ? undefined : FadeInDown.delay(80).duration(500)}
             style={{ paddingHorizontal: 20, paddingBottom: 20 }}
           >
             <TouchableOpacity
               onPress={() => setSearchVisible(true)}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t("home.searchPlaceholder")}
               style={{
                 flexDirection: "row", alignItems: "center", backgroundColor: colors.surface,
                 borderRadius: 16, paddingHorizontal: 16, paddingVertical: 13,
                 borderWidth: 1, borderColor: colors.border, gap: 10, marginTop: 12,
               }}
             >
-              <Text style={{ fontSize: 16 }}>🔍</Text>
+              <Ionicons name="search-outline" size={18} color={colors.muted} />
               <Text style={{ fontSize: 14, color: colors.muted, flex: 1 }}>
                 {t("home.searchPlaceholder")}
               </Text>
@@ -188,7 +193,7 @@ export default function HomeScreen() {
           {/* Categories */}
           <View style={{ paddingHorizontal: 15, marginBottom: 28 }}>
             <Animated.Text
-              entering={isWeb ? undefined : FadeInDown.delay(120).duration(500)}
+              entering={noAnim ? undefined : FadeInDown.delay(120).duration(500)}
               style={{ fontSize: 17, fontWeight: "800", color: colors.foreground, marginBottom: 14, paddingHorizontal: 5 }}
             >
               {t("home.exploreTitle")}
@@ -206,7 +211,7 @@ export default function HomeScreen() {
           {/* Trending venues */}
           <View style={{ marginBottom: 28 }}>
             <Animated.View
-              entering={isWeb ? undefined : FadeInDown.delay(260).duration(500)}
+              entering={noAnim ? undefined : FadeInDown.delay(260).duration(500)}
               style={{
                 paddingHorizontal: 20, marginBottom: 14,
                 flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -222,10 +227,49 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </Animated.View>
 
-            {venuesLoading ? (
-              <View style={{ height: 220, justifyContent: "center", alignItems: "center" }}>
-                <ActivityIndicator color={colors.muted} size="large" />
+            {venuesError ? (
+              <View style={{ paddingHorizontal: 20, paddingVertical: 32, alignItems: "center", gap: 12 }}>
+                <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} />
+                <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center" }}>
+                  {t("common.error")}
+                </Text>
+                <TouchableOpacity
+                  onPress={refetchVenues}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("common.retry")}
+                  style={{
+                    backgroundColor: colors.primary, borderRadius: 50,
+                    paddingHorizontal: 24, paddingVertical: 11,
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.background }}>
+                    {t("common.retry")}
+                  </Text>
+                </TouchableOpacity>
               </View>
+            ) : venuesLoading ? (
+              <FlatList
+                data={[0, 1, 2]}
+                keyExtractor={(i) => `venue-skeleton-${i}`}
+                horizontal
+                scrollEnabled={false}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20 }}
+                renderItem={() => (
+                  <View style={{
+                    marginRight: 14, width: 260, borderRadius: 20, overflow: "hidden",
+                    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+                  }}>
+                    <View style={{ height: 148, backgroundColor: colors.border }} />
+                    <View style={{ padding: 14, gap: 8 }}>
+                      <View style={{ height: 14, width: "70%", borderRadius: 6, backgroundColor: colors.border }} />
+                      <View style={{ height: 10, width: "40%", borderRadius: 6, backgroundColor: colors.border }} />
+                      <View style={{ height: 10, width: "90%", borderRadius: 6, backgroundColor: colors.border }} />
+                    </View>
+                  </View>
+                )}
+              />
             ) : (
               <FlatList
                 data={featuredVenues}
@@ -234,13 +278,20 @@ export default function HomeScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 20 }}
+                ListEmptyComponent={
+                  <View style={{ paddingVertical: 24 }}>
+                    <Text style={{ fontSize: 14, color: colors.muted }}>
+                      {t("home.noTrending")}
+                    </Text>
+                  </View>
+                }
               />
             )}
           </View>
 
           {/* CTA */}
           <Animated.View
-            entering={isWeb ? undefined : FadeInUp.delay(380).springify().damping(16)}
+            entering={noAnim ? undefined : FadeInUp.delay(380).springify().damping(16)}
             style={{ paddingHorizontal: 20, marginBottom: 32 }}
           >
             <View style={{

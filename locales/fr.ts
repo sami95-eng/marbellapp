@@ -46,6 +46,8 @@ const fr = {
   "home.joinCircle": "Rejoindre le cercle",
   "home.joinDesc": "Proposez des tables VIP & expériences exclusives aux créateurs de contenu. Augmentez votre visibilité.",
   "home.becomePartner": "Devenir partenaire →",
+  "home.noTrending": "Aucun lieu en vedette pour l'instant",
+  "home.openMap": "Ouvrir la carte",
 
   // ── Login ─────────────────────────────────────────────────────────
   "login.tagline": "Expériences exclusives à Marbella",

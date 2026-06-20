@@ -46,6 +46,8 @@ const en = {
   "home.joinCircle": "Join the Circle",
   "home.joinDesc": "Offer VIP tables & exclusive experiences to content creators. Grow your visibility.",
   "home.becomePartner": "Become a Partner →",
+  "home.noTrending": "No featured venues yet",
+  "home.openMap": "Open map",
 
   // ── Login ─────────────────────────────────────────────────────────
   "login.tagline": "Exclusive experiences in Marbella",
