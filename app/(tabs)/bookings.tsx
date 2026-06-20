@@ -4,6 +4,7 @@ import {
   FlatList, ActivityIndicator, Alert, Platform, Modal, TextInput,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useTranslation } from "react-i18next";
@@ -17,22 +18,25 @@ import { submitRating, getUserRatingForBooking } from "@/lib/ratings-service";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  "Beach Club":     "🌊",
-  "Fine Dining":    "🍽️",
-  "Spa & Wellness": "🧖",
-  "Nightlife":      "🎉",
-  "Events":         "🌟",
-  "Water Sports":   "🌊",
-  "Hotel":          "🏨",
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+const CATEGORY_IONICONS: Record<string, IoniconName> = {
+  "Beach Club":     "umbrella-outline",
+  "Fine Dining":    "restaurant-outline",
+  "Spa & Wellness": "leaf-outline",
+  "Nightlife":      "wine-outline",
+  "Events":         "sparkles-outline",
+  "Water Sports":   "boat-outline",
+  "Hotel":          "bed-outline",
 };
 
-const STATUS_COLORS = {
-  confirmed: { color: "#4ADE80", bg: "rgba(74,222,128,0.15)"  },
-  pending:   { color: "#F59E0B", bg: "rgba(245,158,11,0.15)"  },
-  completed: { color: "#D4AF37", bg: "rgba(212,175,55,0.15)"  },
-  cancelled: { color: "#EF4444", bg: "rgba(239,68,68,0.15)"   },
-};
+// Status badge colours, keyed to semantic theme tokens (see useStatusColors).
+const STATUS_TOKENS = {
+  confirmed: "success",
+  pending:   "warning",
+  completed: "primary",
+  cancelled: "error",
+} as const;
 
 function formatDate(dateStr: string): string {
   try {
@@ -74,9 +78,9 @@ function BookingCard({
   const router = useRouter();
   const { t }  = useTranslation();
 
-  const statusKey  = item.status as keyof typeof STATUS_COLORS;
-  const statusCfg  = STATUS_COLORS[statusKey] ?? STATUS_COLORS.confirmed;
-  const emoji      = CATEGORY_EMOJI[item.venue_category ?? ""] ?? "✨";
+  const statusKey   = item.status as keyof typeof STATUS_TOKENS;
+  const statusColor = colors[STATUS_TOKENS[statusKey] ?? "success"];
+  const categoryIcon = CATEGORY_IONICONS[item.venue_category ?? ""] ?? "sparkles-outline";
 
   const statusLabel: Record<string, string> = {
     confirmed: t("bookings.confirmed"),
@@ -102,10 +106,11 @@ function BookingCard({
         {/* Icon */}
         <View style={{
           width: 56, height: 56, borderRadius: 14,
-          backgroundColor: "rgba(212,175,55,0.15)",
+          backgroundColor: colors.background,
+          borderWidth: 1, borderColor: colors.border,
           alignItems: "center", justifyContent: "center",
         }}>
-          <Text style={{ fontSize: 28 }}>{emoji}</Text>
+          <Ionicons name={categoryIcon} size={26} color={colors.foreground} />
         </View>
 
         {/* Content */}
@@ -115,8 +120,8 @@ function BookingCard({
             <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, flex: 1 }} numberOfLines={1}>
               {item.venue_name}
             </Text>
-            <View style={{ backgroundColor: statusCfg.bg, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: statusCfg.color }}>
+            <View style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: statusColor, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: statusColor }}>
                 {statusLabel[item.status] ?? item.status}
               </Text>
             </View>
@@ -124,7 +129,7 @@ function BookingCard({
 
           {/* Category */}
           {item.venue_category && (
-            <Text style={{ fontSize: 12, color: colors.primary, marginTop: 2, fontWeight: "600" }}>
+            <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: "600" }}>
               {item.venue_category}
             </Text>
           )}
@@ -132,15 +137,15 @@ function BookingCard({
           {/* Date / time / guests */}
           <View style={{ flexDirection: "row", marginTop: 8, gap: 12, flexWrap: "wrap" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text style={{ fontSize: 13 }}>📅</Text>
+              <Ionicons name="calendar-outline" size={12} color={colors.muted} />
               <Text style={{ fontSize: 12, color: colors.muted }}>{formatDate(item.date)}</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text style={{ fontSize: 13 }}>🕐</Text>
+              <Ionicons name="time-outline" size={12} color={colors.muted} />
               <Text style={{ fontSize: 12, color: colors.muted }}>{item.time}</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text style={{ fontSize: 13 }}>👥</Text>
+              <Ionicons name="people-outline" size={12} color={colors.muted} />
               <Text style={{ fontSize: 12, color: colors.muted }}>
                 {item.guests} {item.guests === 1 ? t("common.guest") : t("common.guests")}
               </Text>
@@ -150,7 +155,7 @@ function BookingCard({
           {/* Table info */}
           {item.table_name && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}>
-              <Text style={{ fontSize: 12 }}>🪑</Text>
+              <Ionicons name="restaurant-outline" size={12} color={colors.muted} />
               <Text style={{ fontSize: 12, color: colors.muted }}>
                 {item.table_name}
                 {item.table_price ? ` · From €${Number(item.table_price).toLocaleString()}` : ""}
@@ -160,7 +165,7 @@ function BookingCard({
 
           {/* Confirmation ref */}
           {item.confirmation_number && (
-            <Text style={{ fontSize: 10, color: "#555", marginTop: 5, letterSpacing: 0.5 }}>
+            <Text style={{ fontSize: 10, color: colors.muted, marginTop: 5, letterSpacing: 0.5 }}>
               Ref: {item.confirmation_number}
             </Text>
           )}
@@ -174,14 +179,15 @@ function BookingCard({
                 disabled={cancelling}
                 onPress={() => onCancel(item)}
                 style={{
-                  flex: 1, backgroundColor: "rgba(239,68,68,0.15)",
+                  flex: 1, backgroundColor: colors.surface,
+                  borderWidth: 1, borderColor: colors.error,
                   paddingVertical: 8, borderRadius: 8, alignItems: "center",
                   opacity: cancelling ? 0.5 : 1,
                 }}
               >
                 {cancelling
-                  ? <ActivityIndicator color="#EF4444" size="small" />
-                  : <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 12 }}>{t("bookings.cancel")}</Text>}
+                  ? <ActivityIndicator color={colors.error} size="small" />
+                  : <Text style={{ color: colors.error, fontWeight: "700", fontSize: 12 }}>{t("bookings.cancel")}</Text>}
               </TouchableOpacity>
             </View>
           )}
@@ -192,13 +198,14 @@ function BookingCard({
               activeOpacity={0.7}
               onPress={() => onReview(item)}
               style={{
-                marginTop: 8, backgroundColor: "rgba(212,175,55,0.15)",
+                marginTop: 8, backgroundColor: colors.surface,
+                borderWidth: 1, borderColor: colors.border,
                 paddingVertical: 8, borderRadius: 8, alignItems: "center",
                 flexDirection: "row", justifyContent: "center", gap: 6,
               }}
             >
-              <Text style={{ fontSize: 13 }}>⭐</Text>
-              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>
+              <Ionicons name="star-outline" size={13} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 12 }}>
                 {t("bookings.leaveReview") || "Laisser un avis"}
               </Text>
             </TouchableOpacity>
@@ -210,11 +217,12 @@ function BookingCard({
               activeOpacity={0.7}
               onPress={() => onRebook(item)}
               style={{
-                marginTop: 10, backgroundColor: "rgba(212,175,55,0.15)",
+                marginTop: 10, backgroundColor: colors.surface,
+                borderWidth: 1, borderColor: colors.border,
                 paddingVertical: 8, borderRadius: 8, alignItems: "center",
               }}
             >
-              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>
+              <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 12 }}>
                 {t("bookings.bookAgain")}
               </Text>
             </TouchableOpacity>
@@ -285,7 +293,9 @@ function RatingModal({
             <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>
               {t("bookings.leaveReview") || "Laisser un avis"}
             </Text>
-            <TouchableOpacity onPress={onClose}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
+            <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel={t("common.cancel")}>
+              <Ionicons name="close" size={22} color={colors.muted} />
+            </TouchableOpacity>
           </View>
           {booking?.venue_name ? (
             <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 16 }}>{booking.venue_name}</Text>
@@ -299,7 +309,7 @@ function RatingModal({
               <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 18 }}>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <TouchableOpacity key={n} onPress={() => setScore(n)} activeOpacity={0.7}>
-                    <Text style={{ fontSize: 38, color: n <= score ? "#F59E0B" : colors.border }}>
+                    <Text style={{ fontSize: 38, color: n <= score ? colors.warning : colors.border }}>
                       {n <= score ? "★" : "☆"}
                     </Text>
                   </TouchableOpacity>
@@ -311,7 +321,7 @@ function RatingModal({
                 value={comment}
                 onChangeText={setComment}
                 placeholder={t("bookings.reviewPlaceholder") || "Partage ton expérience (optionnel)…"}
-                placeholderTextColor="#555"
+                placeholderTextColor={colors.muted}
                 multiline
                 numberOfLines={4}
                 style={{
@@ -326,13 +336,13 @@ function RatingModal({
                 disabled={saving || score < 1}
                 activeOpacity={0.85}
                 style={{
-                  backgroundColor: score >= 1 ? colors.primary : "#333", borderRadius: 50,
+                  backgroundColor: score >= 1 ? colors.primary : colors.surface, borderRadius: 50,
                   paddingVertical: 15, alignItems: "center", opacity: saving ? 0.6 : 1,
                 }}
               >
                 {saving
-                  ? <ActivityIndicator color="#0A0E13" />
-                  : <Text style={{ color: score >= 1 ? "#0A0E13" : "#777", fontWeight: "800", fontSize: 15 }}>
+                  ? <ActivityIndicator color={colors.background} />
+                  : <Text style={{ color: score >= 1 ? colors.background : colors.muted, fontWeight: "800", fontSize: 15 }}>
                       {t("common.send") || "Envoyer"}
                     </Text>}
               </TouchableOpacity>
@@ -453,9 +463,9 @@ export default function BookingsScreen() {
         {/* Stats */}
         <View style={{ flexDirection: "row", paddingHorizontal: 20, gap: 10, marginTop: 14, marginBottom: 16 }}>
           {[
-            { label: t("bookings.upcoming"),  count: upcoming.length,  color: "#4ADE80" },
-            { label: t("bookings.completed"), count: past.length,      color: "#D4AF37" },
-            { label: t("bookings.cancelled"), count: cancelled.length, color: "#EF4444" },
+            { label: t("bookings.upcoming"),  count: upcoming.length,  color: colors.success },
+            { label: t("bookings.completed"), count: past.length,      color: colors.primary },
+            { label: t("bookings.cancelled"), count: cancelled.length, color: colors.error },
           ].map((stat) => (
             <View key={stat.label} style={{
               flex: 1, backgroundColor: colors.surface, borderRadius: 12,
@@ -488,7 +498,7 @@ export default function BookingsScreen() {
               >
                 <Text style={{
                   fontSize: 13, fontWeight: isActive ? "700" : "500",
-                  color: isActive ? "#0A0E13" : colors.muted,
+                  color: isActive ? colors.background : colors.muted,
                 }}>
                   {tab === "upcoming" ? t("bookings.tabUpcoming")
                    : tab === "past"   ? t("bookings.tabPast")
@@ -509,11 +519,12 @@ export default function BookingsScreen() {
         {/* Error */}
         {!loading && error && (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>⚠️</Text>
+            <Ionicons name="cloud-offline-outline" size={40} color={colors.muted} style={{ marginBottom: 12 }} />
             <Text style={{ color: colors.muted, textAlign: "center", marginBottom: 16 }}>{error}</Text>
             <TouchableOpacity onPress={refetch} activeOpacity={0.7}
+              accessibilityRole="button" accessibilityLabel={t("common.retry")}
               style={{ backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 }}>
-              <Text style={{ color: "#0A0E13", fontWeight: "700" }}>Retry</Text>
+              <Text style={{ color: colors.background, fontWeight: "700" }}>{t("common.retry")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -535,7 +546,7 @@ export default function BookingsScreen() {
         {/* Empty */}
         {!loading && !error && filtered.length === 0 && (
           <ScrollView contentContainerStyle={{ flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 80 }}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>📭</Text>
+            <Ionicons name="calendar-clear-outline" size={48} color={colors.muted} style={{ marginBottom: 12 }} />
             <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>
               {t("bookings.noBookings")}
             </Text>
@@ -547,7 +558,7 @@ export default function BookingsScreen() {
               activeOpacity={0.7}
               style={{ marginTop: 20, backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
             >
-              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>
+              <Text style={{ color: colors.background, fontWeight: "700", fontSize: 14 }}>
                 {t("bookings.exploreVenues")}
               </Text>
             </TouchableOpacity>
