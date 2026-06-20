@@ -1,11 +1,14 @@
-import { ScrollView, Text, View, TouchableOpacity } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { useTranslation } from "react-i18next";
+import { supabase } from "@/lib/supabase";
 
 export default function BookingConfirmationScreen() {
   const { t } = useTranslation();
-  const { venueId, venueName: venueNameParam, date, time, guests, tableName, tablePrice, confirmationNumber } = useLocalSearchParams<{
+  const { session_id, venueId, venueName: venueNameParam, date, time, guests, tableName, tablePrice, confirmationNumber } = useLocalSearchParams<{
+    session_id?: string;
     venueId: string;
     venueName?: string;
     date: string;
@@ -16,6 +19,30 @@ export default function BookingConfirmationScreen() {
     confirmationNumber?: string;
   }>();
   const router = useRouter();
+
+  // Statut de paiement : interrogé via get-checkout-status quand on revient de
+  // Stripe Checkout (success_url = .../booking-confirmation?session_id=...).
+  type PayState = "none" | "checking" | "paid" | "pending";
+  const [payState, setPayState] = useState<PayState>(session_id ? "checking" : "none");
+
+  useEffect(() => {
+    if (!session_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("get-checkout-status", {
+          body: { sessionId: session_id },
+        });
+        if (cancelled) return;
+        const d = data as { paymentStatus?: string; status?: string } | null;
+        const paid = !error && (d?.paymentStatus === "paid" || d?.status === "complete");
+        setPayState(paid ? "paid" : "pending");
+      } catch {
+        if (!cancelled) setPayState("pending");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session_id]);
 
   // Use passed venueName, fall back to a lookup, then to a generic label
   const VENUE_NAME_MAP: Record<string, string> = {
@@ -35,16 +62,54 @@ export default function BookingConfirmationScreen() {
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Success Icon */}
+        {/* Statut */}
         <View className="items-center pt-12 pb-8">
-          <View className="w-20 h-20 rounded-full bg-primary items-center justify-center mb-4">
-            <Text className="text-5xl">⏳</Text>
-          </View>
-          <Text className="text-3xl font-bold text-foreground">
-            {t("bookingConfirm.title")}
-          </Text>
+          {payState === "paid" ? (
+            <>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(74,222,128,0.18)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                <Text style={{ fontSize: 44 }}>✅</Text>
+              </View>
+              <Text className="text-3xl font-bold text-foreground" style={{ textAlign: "center" }}>
+                Paiement confirmé
+              </Text>
+              <Text className="text-sm text-muted mt-2" style={{ textAlign: "center" }}>
+                Ta réservation est payée. Tu recevras un email de confirmation.
+              </Text>
+            </>
+          ) : payState === "checking" ? (
+            <>
+              <ActivityIndicator color="#D4AF37" size="large" style={{ marginBottom: 16 }} />
+              <Text className="text-3xl font-bold text-foreground" style={{ textAlign: "center" }}>
+                Vérification du paiement…
+              </Text>
+            </>
+          ) : payState === "pending" ? (
+            <>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(245,158,11,0.18)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                <Text style={{ fontSize: 44 }}>⏳</Text>
+              </View>
+              <Text className="text-3xl font-bold text-foreground" style={{ textAlign: "center" }}>
+                En attente de paiement
+              </Text>
+              <Text className="text-sm text-muted mt-2" style={{ textAlign: "center" }}>
+                Si tu viens de payer, le statut se met à jour sous peu.
+              </Text>
+            </>
+          ) : (
+            // Flux sans paiement (réservation en attente de validation partenaire)
+            <>
+              <View className="w-20 h-20 rounded-full bg-primary items-center justify-center mb-4">
+                <Text className="text-5xl">⏳</Text>
+              </View>
+              <Text className="text-3xl font-bold text-foreground" style={{ textAlign: "center" }}>
+                {t("bookingConfirm.title")}
+              </Text>
+            </>
+          )}
         </View>
 
+        {/* Détails + n° : seulement hors retour Stripe (params présents). */}
+        {!session_id && (<>
         {/* Confirmation Details */}
         <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
           <Text className="text-lg font-bold text-foreground mb-4">
@@ -108,6 +173,7 @@ export default function BookingConfirmationScreen() {
             {t("bookingConfirm.saveNumber")}
           </Text>
         </View>
+        </>)}
 
         {/* What to Expect */}
         <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
