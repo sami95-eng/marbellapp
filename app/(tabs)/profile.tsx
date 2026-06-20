@@ -1,4 +1,5 @@
-import { ScrollView, Text, View, TouchableOpacity, Alert, Platform } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, Alert, Platform, Modal, TextInput, ActivityIndicator, Linking } from "react-native";
+import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -9,6 +10,7 @@ import { useNotifications } from "@/lib/notifications-context";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Image } from "expo-image";
+import { getUserVipStatus, submitPost, type VipStatus } from "@/lib/vip-service";
 
 const BADGES = [
   { emoji: "🌟", name: "Explorer", unlocked: true },
@@ -28,12 +30,46 @@ export default function ProfileScreen() {
   const { bookings } = useBookings(user?.id);
   const { unreadCount } = useNotifications();
 
+  // ── VIP Instagram ────────────────────────────────────────────────
+  const [vipStatus, setVipStatus] = useState<VipStatus | null>(null);
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [postUrl, setPostUrl] = useState("");
+  const [igHandle, setIgHandle] = useState("");
+
+  const reloadVip = () => {
+    if (!user?.id) { setVipStatus(null); return; }
+    getUserVipStatus(user.id).then(setVipStatus).catch(() => {});
+  };
+  useEffect(() => {
+    if (!user?.id) { setVipStatus(null); return; }
+    let cancelled = false;
+    getUserVipStatus(user.id).then((s) => { if (!cancelled) setVipStatus(s); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const vipNotify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+  const handleSubmitPost = async () => {
+    if (!postUrl.trim()) { vipNotify("Colle l'URL de ton post Instagram."); return; }
+    setSubmitting(true);
+    try {
+      await submitPost(postUrl, igHandle);
+      setPostUrl(""); setIgHandle(""); setShowSubmit(false);
+      reloadVip();
+      vipNotify("Post soumis ! Il sera validé par l'équipe.");
+    } catch (e: any) {
+      vipNotify(e.message ?? "Échec de l'envoi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const completedCount = bookings.filter((b) => b.status === "completed" || b.status === "confirmed").length;
 
   const STATS = [
     { label: t("profile.experiences"), value: completedCount > 0 ? String(completedCount) : "0", icon: "✨" },
     { label: t("profile.photos"),        value: "47", icon: "📸" },
-    { label: t("profile.partnerPosts"),  value: "18", icon: "🏷️" },
+    { label: t("profile.partnerPosts"),  value: vipStatus ? String(vipStatus.post_count) : "0", icon: "🏷️" },
   ];
 
   const MENU_ITEMS = [
@@ -149,7 +185,9 @@ export default function ProfileScreen() {
             paddingVertical: 6, borderRadius: 20,
           }}>
             <Text style={{ fontSize: 14 }}>👑</Text>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>Gold Member</Text>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
+              {vipStatus ? `${vipStatus.tier.label} Member` : "Member"}
+            </Text>
           </View>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -172,6 +210,84 @@ export default function ProfileScreen() {
               <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{stat.label}</Text>
             </View>
           ))}
+        </View>
+
+        {/* Statut VIP */}
+        <View style={{ paddingHorizontal: 20, marginTop: 22 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>Statut VIP</Text>
+            <TouchableOpacity onPress={() => setShowSubmit(true)} activeOpacity={0.8}
+              style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 }}>
+              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>＋ Soumettre un post</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Carte palier + progression */}
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{
+                  width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center",
+                  backgroundColor: (vipStatus?.tier.color ?? "#CD7F32") + "33",
+                  borderWidth: 2, borderColor: vipStatus?.tier.color ?? "#CD7F32",
+                }}>
+                  <Text style={{ fontSize: 18 }}>👑</Text>
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: vipStatus?.tier.color ?? colors.foreground }}>
+                    {vipStatus?.tier.label ?? "Bronze"}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.muted }}>
+                    {vipStatus ? `${vipStatus.post_count} post${vipStatus.post_count !== 1 ? "s" : ""} approuvé${vipStatus.post_count !== 1 ? "s" : ""}` : "…"}
+                  </Text>
+                </View>
+              </View>
+              {vipStatus && vipStatus.discount_pct > 0 ? (
+                <View style={{ backgroundColor: "rgba(74,222,128,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                  <Text style={{ color: "#4ADE80", fontWeight: "700", fontSize: 12 }}>-{vipStatus.discount_pct}%</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {vipStatus?.nextTier ? (
+              <View style={{ marginTop: 14 }}>
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                  <View style={{
+                    height: "100%", backgroundColor: vipStatus.nextTier.color,
+                    width: `${Math.max(4, Math.min(100, Math.round(((vipStatus.post_count - vipStatus.tier.min_posts) / Math.max(1, vipStatus.nextTier.min_posts - vipStatus.tier.min_posts)) * 100)))}%`,
+                  }} />
+                </View>
+                <Text style={{ fontSize: 11, color: colors.muted, marginTop: 6 }}>
+                  Encore {Math.max(0, vipStatus.nextTier.min_posts - vipStatus.post_count)} post(s) pour {vipStatus.nextTier.label} (-{vipStatus.nextTier.discount_pct}%)
+                </Text>
+              </View>
+            ) : vipStatus ? (
+              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 12 }}>Palier maximum atteint 🎉</Text>
+            ) : null}
+          </View>
+
+          {/* Posts soumis */}
+          {vipStatus && vipStatus.posts.length > 0 && (
+            <View style={{ marginTop: 12, gap: 8 }}>
+              {vipStatus.posts.map((p) => {
+                const sc = p.status === "approved" ? "#4ADE80" : p.status === "rejected" ? "#EF4444" : "#F59E0B";
+                const sl = p.status === "approved" ? "Approuvé" : p.status === "rejected" ? "Rejeté" : "En attente";
+                return (
+                  <View key={p.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border }}>
+                    <TouchableOpacity style={{ flex: 1, marginRight: 10 }} onPress={() => Linking.openURL(p.post_url).catch(() => {})} activeOpacity={0.7}>
+                      <Text style={{ fontSize: 12, color: colors.primary }} numberOfLines={1}>{p.post_url}</Text>
+                      <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }}>
+                        {new Date(p.submitted_at).toLocaleDateString("fr-FR")}
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={{ backgroundColor: sc + "22", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                      <Text style={{ color: sc, fontWeight: "700", fontSize: 11 }}>{sl}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Badges */}
@@ -246,6 +362,35 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal : soumettre un post VIP */}
+      <Modal visible={showSubmit} transparent animationType="slide" onRequestClose={() => setShowSubmit(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, borderWidth: 1, borderColor: colors.border, gap: 14 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Soumettre un post</Text>
+              <TouchableOpacity onPress={() => setShowSubmit(false)}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 12, color: colors.muted }}>
+              Publie ta photo avec #marbellappvip, puis colle le lien ici. Validé par l'équipe.
+            </Text>
+            <View>
+              <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>URL DU POST *</Text>
+              <TextInput value={postUrl} onChangeText={setPostUrl} placeholder="https://instagram.com/p/..." placeholderTextColor="#555" autoCapitalize="none"
+                style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+            </View>
+            <View>
+              <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>@INSTAGRAM</Text>
+              <TextInput value={igHandle} onChangeText={setIgHandle} placeholder="@ton_compte" placeholderTextColor="#555" autoCapitalize="none"
+                style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
+            </View>
+            <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !postUrl.trim()} activeOpacity={0.85}
+              style={{ backgroundColor: postUrl.trim() ? colors.primary : "#333", borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
+              {submitting ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

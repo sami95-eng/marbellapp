@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { createBooking } from "@/lib/bookings-service";
 import { getAvailableSlots, bookSlot, releaseSlot, type AvailabilitySlot } from "@/lib/availability-service";
+import { getUserVipStatus } from "@/lib/vip-service";
 
 // Le date-picker natif ne supporte pas le web : on ne le charge que sur natif
 // (le require n'est jamais exécuté sur web → aucun crash de bundle).
@@ -198,6 +199,10 @@ export default function BookingScreen() {
   // Prix de base de la venue (avg_price_eur, en euros) — utilisé si aucune table.
   const [venueBasePriceEur, setVenueBasePriceEur] = useState<number | null>(null);
 
+  // Réduction VIP de l'utilisateur (palier Instagram).
+  const [vipDiscountPct, setVipDiscountPct] = useState(0);
+  const [vipTierLabel, setVipTierLabel] = useState("");
+
   // Charge les créneaux disponibles pour le jour de la date choisie
   useEffect(() => {
     if (isDemoMode || !venueUuidParam || !date) { setSlots([]); setSelectedSlot(null); return; }
@@ -231,11 +236,26 @@ export default function BookingScreen() {
     return () => { cancelled = true; };
   }, [venueUuidParam, venueId, isDemoMode]);
 
+  // Charge la réduction VIP de l'utilisateur (palier Instagram).
+  useEffect(() => {
+    if (isDemoMode || !user?.id) return;
+    let cancelled = false;
+    getUserVipStatus(user.id)
+      .then((s) => { if (!cancelled) { setVipDiscountPct(s.discount_pct); setVipTierLabel(s.tier.label); } })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id, isDemoMode]);
+
   // Montant à payer : table sélectionnée → price_min ; sinon prix moyen venue.
   // null = aucun prix en base → "Prix sur demande", pas de paiement Stripe.
   const priceEur: number | null = selectedTable ? selectedTable.price_min : venueBasePriceEur;
-  const amountCents: number | null =
+  const baseCents: number | null =
     priceEur != null && priceEur > 0 ? Math.round(priceEur * 100) : null;
+  // Réduction VIP appliquée automatiquement au montant facturé.
+  const amountCents: number | null =
+    baseCents != null
+      ? (vipDiscountPct > 0 ? Math.round(baseCents * (1 - vipDiscountPct / 100)) : baseCents)
+      : null;
   const payable = amountCents != null;
 
   const goBack = () => {
@@ -663,10 +683,22 @@ export default function BookingScreen() {
                 ? (selectedTable ? `Table · ${selectedTable.name}` : "Prix moyen indicatif")
                 : "Paiement non requis"}
             </Text>
+            {baseCents != null && vipDiscountPct > 0 ? (
+              <Text style={{ fontSize: 11, color: "#4ADE80", fontWeight: "700", marginTop: 4 }}>
+                Réduction VIP {vipTierLabel} −{vipDiscountPct}%
+              </Text>
+            ) : null}
           </View>
-          <Text style={{ fontSize: 22, fontWeight: "800", color: "#D4AF37" }}>
-            {amountCents != null ? formatEur(amountCents) : "Prix sur demande"}
-          </Text>
+          <View style={{ alignItems: "flex-end" }}>
+            {baseCents != null && vipDiscountPct > 0 ? (
+              <Text style={{ fontSize: 12, color: "#666", textDecorationLine: "line-through" }}>
+                {formatEur(baseCents)}
+              </Text>
+            ) : null}
+            <Text style={{ fontSize: 22, fontWeight: "800", color: "#D4AF37" }}>
+              {amountCents != null ? formatEur(amountCents) : "Prix sur demande"}
+            </Text>
+          </View>
         </View>
 
         {/* ── Terms ───────────────────────────────────────────────── */}

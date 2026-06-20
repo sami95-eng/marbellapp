@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ScrollView, Text, View, TouchableOpacity, FlatList, TextInput, Switch, ActivityIndicator, Alert, Platform, Modal } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, FlatList, TextInput, Switch, ActivityIndicator, Alert, Platform, Modal, Linking } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -27,6 +27,7 @@ import {
   getOwnerVenues, uploadCover, removeCover, uploadGalleryPhoto, removeGalleryPhoto,
   type OwnerVenue,
 } from "@/lib/venue-photos-service";
+import { getPendingPosts, approvePost, rejectPost, type PendingPost } from "@/lib/vip-service";
 import * as ImagePicker from "expo-image-picker";
 import { decode as decodeBase64 } from "base64-arraybuffer";
 import {
@@ -37,7 +38,7 @@ import {
   type AdminClient, type ClientBooking,
 } from "@/lib/clients-service";
 
-type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients";
+type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overview Tab
@@ -1694,6 +1695,85 @@ function TablesTab({ colors, isDemo, isAdmin, userId }: { colors: ReturnType<typ
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// VIP Posts Tab (admin only) — validation des soumissions Instagram
+// ─────────────────────────────────────────────────────────────────────────────
+function VipPostsTab({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const [posts, setPosts] = useState<PendingPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setPosts(await getPendingPosts()); }
+    catch (e: any) { notify(e.message ?? "Erreur de chargement"); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const decide = async (id: string, action: "approve" | "reject") => {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      if (action === "approve") await approvePost(id); else await rejectPost(id);
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+    } catch (e: any) { notify(e.message ?? "Échec de l'opération"); }
+    finally { setBusyId(null); }
+  };
+
+  if (loading) {
+    return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
+  }
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <Text style={{ fontSize: 13, color: colors.muted }}>{posts.length} post(s) en attente</Text>
+        <TouchableOpacity onPress={load} activeOpacity={0.7} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+          <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>↻</Text>
+        </TouchableOpacity>
+      </View>
+
+      {posts.length === 0 ? (
+        <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
+          <Text style={{ fontSize: 32 }}>📸</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Aucun post à valider</Text>
+        </View>
+      ) : posts.map((p) => {
+        const busy = busyId === p.id;
+        return (
+          <View key={p.id} style={{ backgroundColor: colors.surface, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.foreground, flex: 1 }} numberOfLines={1}>
+                {p.user_name ?? "Client"}
+              </Text>
+              {p.instagram_handle ? <Text style={{ fontSize: 12, color: colors.primary }}>@{p.instagram_handle}</Text> : null}
+            </View>
+            <TouchableOpacity onPress={() => Linking.openURL(p.post_url).catch(() => {})} activeOpacity={0.7} style={{ marginTop: 6 }}>
+              <Text style={{ fontSize: 12, color: colors.primary }} numberOfLines={1}>🔗 {p.post_url}</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>
+              {p.hashtag ?? "#marbellappvip"} · {new Date(p.submitted_at).toLocaleDateString("fr-FR")}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+              <TouchableOpacity disabled={busy} onPress={() => decide(p.id, "approve")} activeOpacity={0.8}
+                style={{ flex: 1, backgroundColor: "#4ADE80", borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+                {busy ? <ActivityIndicator color="#0A0E13" size="small" /> : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 13 }}>✓ Approuver</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity disabled={busy} onPress={() => decide(p.id, "reject")} activeOpacity={0.8}
+                style={{ flex: 1, backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1, borderColor: "#EF4444", borderRadius: 10, paddingVertical: 11, alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+                <Text style={{ color: "#EF4444", fontWeight: "800", fontSize: 13 }}>✕ Rejeter</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Clients Tab (admin only)
 // ─────────────────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 20;
@@ -2007,8 +2087,11 @@ export default function PartnerDashboardScreen() {
     { id: "offers",       label: t("partner.tabOffers"),       icon: "👑" },
     { id: "photos",       label: "Photos",                     icon: "📷" },
     { id: "stats",        label: t("partner.tabStats"),        icon: "📈" },
-    // Onglet "Clients" réservé aux admins
-    ...(isAdmin ? [{ id: "clients" as Tab, label: t("admin.clients"), icon: "👥" }] : []),
+    // Onglets réservés aux admins
+    ...(isAdmin ? [
+      { id: "vip-posts" as Tab, label: "Posts VIP", icon: "📸" },
+      { id: "clients" as Tab, label: t("admin.clients"), icon: "👥" },
+    ] : []),
   ];
 
   const partnerName = isDemoMode ? DEMO_PARTNER.name : "My Venue";
@@ -2110,6 +2193,7 @@ export default function PartnerDashboardScreen() {
           {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "photos"       && <PhotosTab       colors={colors} isDemo={isDemoMode} userId={user?.id} />}
           {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} />}
+          {activeTab === "vip-posts"    && isAdmin && <VipPostsTab colors={colors} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
         </View>
       </View>
