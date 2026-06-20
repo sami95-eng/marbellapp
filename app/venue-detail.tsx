@@ -5,6 +5,7 @@ import {
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ImageCarousel } from "@/components/image-carousel";
 import { useVenueBySlug } from "@/hooks/use-venues";
@@ -13,6 +14,9 @@ import { DEFAULT_OFFERS } from "@/lib/venues-service";
 import { getVenueRatings, type RatingWithUser } from "@/lib/ratings-service";
 import { useColors } from "@/hooks/use-colors";
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+// Emoji kept only for the plain-text share message (WhatsApp/SMS), not the UI.
 const CATEGORY_ICONS: Record<string, string> = {
   "Beach Club":     "🌊",
   "Fine Dining":    "🍽️",
@@ -21,6 +25,17 @@ const CATEGORY_ICONS: Record<string, string> = {
   "Events":         "🌟",
   "Shopping":       "🛍️",
   "Hotel":          "🏨",
+};
+
+// On-screen icons: a single Ionicons line family, consistent with the home screen.
+const CATEGORY_IONICONS: Record<string, IoniconName> = {
+  "Beach Club":     "umbrella-outline",
+  "Fine Dining":    "restaurant-outline",
+  "Spa & Wellness": "leaf-outline",
+  "Nightlife":      "wine-outline",
+  "Events":         "sparkles-outline",
+  "Shopping":       "bag-handle-outline",
+  "Hotel":          "bed-outline",
 };
 
 const PRICE_LABELS: Record<string, string> = {
@@ -41,7 +56,7 @@ const ATMOSPHERE: Record<string, string> = {
 };
 
 function InfoRow({ icon, label, value, onPress }: {
-  icon: string; label: string; value: string; onPress?: () => void;
+  icon: IoniconName; label: string; value: string; onPress?: () => void;
 }) {
   const colors = useColors();
   return (
@@ -50,11 +65,14 @@ function InfoRow({ icon, label, value, onPress }: {
       activeOpacity={onPress ? 0.6 : 1}
       style={{ marginBottom: 14 }}
     >
-      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", marginBottom: 4, letterSpacing: 0.5 }}>
-        {icon}  {label.toUpperCase()}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <Ionicons name={icon} size={13} color={colors.muted} />
+        <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5 }}>
+          {label.toUpperCase()}
+        </Text>
+      </View>
       <Text style={{
-        fontSize: 14, color: onPress ? colors.primary : colors.foreground,
+        fontSize: 14, color: colors.foreground,
         textDecorationLine: onPress ? "underline" : "none",
         lineHeight: 20,
       }}>
@@ -87,7 +105,7 @@ export default function VenueDetailScreen() {
     return (
       <ScreenContainer>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color="#D4AF37" size="large" />
+          <ActivityIndicator color={colors.muted} size="large" />
           <Text style={{ color: colors.muted, marginTop: 12, fontSize: 13 }}>Chargement…</Text>
         </View>
       </ScreenContainer>
@@ -98,7 +116,7 @@ export default function VenueDetailScreen() {
     return (
       <ScreenContainer>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <Text style={{ fontSize: 48, marginBottom: 16 }}>🏖️</Text>
+          <Ionicons name="search-outline" size={48} color={colors.muted} style={{ marginBottom: 16 }} />
           <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, marginBottom: 8 }}>
             Venue introuvable
           </Text>
@@ -112,7 +130,7 @@ export default function VenueDetailScreen() {
             style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 50 }}
             activeOpacity={0.7}
           >
-            <Text style={{ color: "#0A0E13", fontWeight: "700" }}>Retour</Text>
+            <Text style={{ color: colors.background, fontWeight: "700" }}>Retour</Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
@@ -120,6 +138,7 @@ export default function VenueDetailScreen() {
   }
 
   const icon = CATEGORY_ICONS[venue.category] ?? "✨";
+  const categoryIcon = CATEGORY_IONICONS[venue.category] ?? "sparkles-outline";
 
   // Carousel images — deduplicated
   const seen = new Set<string>();
@@ -193,14 +212,14 @@ export default function VenueDetailScreen() {
             activeOpacity={0.6}
             style={{ backgroundColor: "rgba(0,0,0,0.45)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" }}
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 18 }}>←</Text>
+            <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleShare}
             activeOpacity={0.6}
             style={{ backgroundColor: "rgba(0,0,0,0.45)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" }}
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 18 }}>↗</Text>
+            <Ionicons name="share-outline" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -217,7 +236,7 @@ export default function VenueDetailScreen() {
               </Text>
               <View style={{ alignItems: "flex-end", marginLeft: 8, marginTop: 4 }}>
                 <View style={{ backgroundColor: colors.primary, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5 }}>
-                  <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 14 }}>
+                  <Text style={{ color: colors.background, fontWeight: "800", fontSize: 14 }}>
                     ★ {Number((venue.rating_count ?? 0) > 0 ? (venue.rating_avg ?? 0) : venue.rating).toFixed(1)}
                   </Text>
                 </View>
@@ -229,10 +248,13 @@ export default function VenueDetailScreen() {
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <View style={{
-                backgroundColor: "rgba(212,175,55,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+                flexDirection: "row", alignItems: "center", gap: 6,
+                backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+                borderWidth: 1, borderColor: colors.border,
               }}>
-                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>
-                  {icon} {venue.category}
+                <Ionicons name={categoryIcon} size={13} color={colors.muted} />
+                <Text style={{ fontSize: 12, color: colors.muted, fontWeight: "600" }}>
+                  {venue.category}
                 </Text>
               </View>
               {venue.price_range && (
@@ -264,12 +286,15 @@ export default function VenueDetailScreen() {
 
           {/* Atmosphere */}
           <View style={{
-            backgroundColor: "rgba(212,175,55,0.07)", borderRadius: 14, padding: 16,
-            borderWidth: 1, borderColor: "rgba(212,175,55,0.2)", marginBottom: 20,
+            backgroundColor: colors.surface, borderRadius: 14, padding: 16,
+            borderWidth: 1, borderColor: colors.border, marginBottom: 20,
           }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary, marginBottom: 6 }}>
-              ✨ Ambiance
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <Ionicons name="sparkles-outline" size={14} color={colors.foreground} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>
+                Ambiance
+              </Text>
+            </View>
             <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 20 }}>
               {ATMOSPHERE[venue.category] ?? "Exclusif, sophistiqué et authentiquement Marbella."}
             </Text>
@@ -285,23 +310,23 @@ export default function VenueDetailScreen() {
             </Text>
 
             {venue.address && (
-              <InfoRow icon="📍" label="Adresse" value={venue.address} onPress={openMap} />
+              <InfoRow icon="location-outline" label="Adresse" value={venue.address} onPress={openMap} />
             )}
             {venue.opening_hours && (
-              <InfoRow icon="🕐" label="Horaires" value={venue.opening_hours} />
+              <InfoRow icon="time-outline" label="Horaires" value={venue.opening_hours} />
             )}
             {venue.website && (
               <InfoRow
-                icon="🌐" label="Site web"
+                icon="globe-outline" label="Site web"
                 value={venue.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                 onPress={openWeb}
               />
             )}
             {venue.instagram_handle && (
-              <InfoRow icon="📸" label="Instagram" value={venue.instagram_handle} onPress={openInsta} />
+              <InfoRow icon="logo-instagram" label="Instagram" value={venue.instagram_handle} onPress={openInsta} />
             )}
             {venue.avg_price_eur && venue.avg_price_eur > 0 && (
-              <InfoRow icon="💳" label="Prix moyen" value={`€${venue.avg_price_eur} / personne`} />
+              <InfoRow icon="card-outline" label="Prix moyen" value={`€${venue.avg_price_eur} / personne`} />
             )}
           </View>
 
@@ -337,10 +362,10 @@ export default function VenueDetailScreen() {
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {offers.map((offer, i) => (
                 <View key={i} style={{
-                  backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary,
+                  backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
                   borderRadius: 50, paddingHorizontal: 14, paddingVertical: 7,
                 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: colors.primary }}>{offer}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>{offer}</Text>
                 </View>
               ))}
             </View>
@@ -361,7 +386,7 @@ export default function VenueDetailScreen() {
                     <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }} numberOfLines={1}>
                       {rev.user_name}
                     </Text>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#F59E0B" }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.warning }}>
                       {"★".repeat(rev.score)}
                       <Text style={{ color: colors.border }}>{"★".repeat(5 - rev.score)}</Text>
                     </Text>
@@ -386,17 +411,19 @@ export default function VenueDetailScreen() {
               style={{ backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 16, alignItems: "center" }}
               activeOpacity={0.8}
             >
-              <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 16 }}>Réserver une expérience VIP</Text>
+              <Text style={{ color: colors.background, fontWeight: "800", fontSize: 16 }}>Réserver une expérience VIP</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleShare}
               style={{
-                borderWidth: 1.5, borderColor: colors.primary, borderRadius: 50,
-                paddingVertical: 14, alignItems: "center",
+                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+                borderWidth: 1.5, borderColor: colors.border, borderRadius: 50,
+                paddingVertical: 14,
               }}
               activeOpacity={0.7}
             >
-              <Text style={{ color: colors.primary, fontWeight: "600" }}>↗ Partager</Text>
+              <Ionicons name="share-outline" size={16} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontWeight: "600" }}>Partager</Text>
             </TouchableOpacity>
           </View>
 
