@@ -41,9 +41,7 @@ const formatDisplayDate = (iso: string) =>
 // Comparaison sûre sur des chaînes YYYY-MM-DD (ordre lexicographique = ordre temporel)
 const isPastDate = (iso: string) => iso < toISODate(new Date());
 
-// Montant de test fixe (en CENTIMES, attendu par Stripe). 5000 = 50,00 €.
-// TODO: remplacer par le montant réel (table/venue) plus tard.
-const TEST_AMOUNT_CENTS = 5000;
+// Formate un montant en centimes vers une chaîne € FR (5000 → "50,00 €").
 const formatEur = (cents: number) =>
   (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 
@@ -197,6 +195,9 @@ export default function BookingScreen() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
 
+  // Prix de base de la venue (avg_price_eur, en euros) — utilisé si aucune table.
+  const [venueBasePriceEur, setVenueBasePriceEur] = useState<number | null>(null);
+
   // Charge les créneaux disponibles pour le jour de la date choisie
   useEffect(() => {
     if (isDemoMode || !venueUuidParam || !date) { setSlots([]); setSelectedSlot(null); return; }
@@ -212,6 +213,30 @@ export default function BookingScreen() {
   }, [venueUuidParam, date, isDemoMode]);
 
   const hasSlotSystem = !isDemoMode && !!venueUuidParam;
+
+  // Charge le prix moyen de la venue (avg_price_eur) pour le cas "sans table".
+  useEffect(() => {
+    if (isDemoMode) { setVenueBasePriceEur(null); return; }
+    if (!venueUuidParam && !venueId) { setVenueBasePriceEur(null); return; }
+    let cancelled = false;
+    (async () => {
+      const base = supabase.from("venues").select("avg_price_eur");
+      const { data } = venueUuidParam
+        ? await base.eq("id", venueUuidParam).maybeSingle()
+        : await base.eq("slug", venueId).maybeSingle();
+      if (!cancelled) {
+        setVenueBasePriceEur((data as { avg_price_eur?: number } | null)?.avg_price_eur ?? null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [venueUuidParam, venueId, isDemoMode]);
+
+  // Montant à payer : table sélectionnée → price_min ; sinon prix moyen venue.
+  // null = aucun prix en base → "Prix sur demande", pas de paiement Stripe.
+  const priceEur: number | null = selectedTable ? selectedTable.price_min : venueBasePriceEur;
+  const amountCents: number | null =
+    priceEur != null && priceEur > 0 ? Math.round(priceEur * 100) : null;
+  const payable = amountCents != null;
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -321,32 +346,49 @@ export default function BookingScreen() {
         }).catch((e) => console.warn("[booking] notification email failed:", e?.message));
       }
 
-      // ── Paiement Stripe Checkout ───────────────────────────────────
-      // Crée la session côté serveur puis redirige vers la page Stripe.
-      // (Au retour, success_url renvoie vers /booking-confirmation ; le
-      //  webhook confirme la réservation après paiement.)
-      const { data: checkout, error: checkoutErr } = await supabase.functions.invoke(
-        "create-checkout-session",
-        {
-          body: {
-            bookingId: created.id,
-            venueId:   venueUuidParam || venueId,
-            amount:    TEST_AMOUNT_CENTS, // en centimes
-            currency:  "eur",
+      if (payable && amountCents) {
+        // ── Paiement Stripe Checkout ─────────────────────────────────
+        // Crée la session côté serveur puis redirige vers la page Stripe.
+        // (Au retour, success_url renvoie vers /booking-confirmation ; le
+        //  webhook confirme la réservation après paiement.)
+        const { data: checkout, error: checkoutErr } = await supabase.functions.invoke(
+          "create-checkout-session",
+          {
+            body: {
+              bookingId: created.id,
+              venueId:   venueUuidParam || venueId,
+              amount:    amountCents, // montant dynamique en centimes
+              currency:  "eur",
+            },
           },
-        },
-      );
-      const checkoutUrl = (checkout as { url?: string } | null)?.url;
-      if (checkoutErr || !checkoutUrl) {
-        throw new Error(checkoutErr?.message ?? "URL de paiement indisponible");
-      }
-
-      if (Platform.OS === "web") {
-        window.location.href = checkoutUrl;
+        );
+        const checkoutUrl = (checkout as { url?: string } | null)?.url;
+        if (checkoutErr || !checkoutUrl) {
+          throw new Error(checkoutErr?.message ?? "URL de paiement indisponible");
+        }
+        if (Platform.OS === "web") {
+          window.location.href = checkoutUrl;
+        } else {
+          await Linking.openURL(checkoutUrl);
+        }
+        // Redirection en cours — réservation "pending" jusqu'au paiement.
       } else {
-        await Linking.openURL(checkoutUrl);
+        // Aucun prix en base → réservation "pending" sans paiement Stripe.
+        router.push({
+          pathname: "/booking-confirmation",
+          params: {
+            venueId,
+            venueName:  resolvedVenueName,
+            date,
+            time,
+            guests,
+            tableId:    selectedTable?.id   ?? "",
+            tableName:  selectedTable?.name ?? "",
+            tablePrice: selectedTable ? String(selectedTable.price_min) : "",
+            confirmationNumber: confirmNum,
+          },
+        });
       }
-      // Redirection en cours — la réservation reste "pending" jusqu'au paiement.
     } catch (e: any) {
       // Échec d'enregistrement OU d'ouverture du paiement → libère le créneau
       if (selectedSlot) releaseSlot(selectedSlot.id).catch(() => {});
@@ -614,12 +656,16 @@ export default function BookingScreen() {
 
         {/* ── Total à payer ───────────────────────────────────────── */}
         <View style={[cardStyle, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={labelStyle}>{t("booking.total") || "TOTAL À PAYER"}</Text>
-            <Text style={{ fontSize: 11, color: "#666" }}>Montant de test</Text>
+            <Text style={{ fontSize: 11, color: "#666" }}>
+              {payable
+                ? (selectedTable ? `Table · ${selectedTable.name}` : "Prix moyen indicatif")
+                : "Paiement non requis"}
+            </Text>
           </View>
           <Text style={{ fontSize: 22, fontWeight: "800", color: "#D4AF37" }}>
-            {formatEur(TEST_AMOUNT_CENTS)}
+            {amountCents != null ? formatEur(amountCents) : "Prix sur demande"}
           </Text>
         </View>
 
@@ -643,7 +689,9 @@ export default function BookingScreen() {
             <ActivityIndicator color="#0a0a0f" />
           ) : (
             <Text style={{ color: "#0a0a0f", fontWeight: "800", fontSize: 16 }}>
-              {(t("booking.confirmAndPay") || "Confirmer et payer")} · {formatEur(TEST_AMOUNT_CENTS)}
+              {amountCents != null
+                ? `${t("booking.confirmAndPay") || "Confirmer et payer"} · ${formatEur(amountCents)}`
+                : (t("booking.confirmBtn") || "Confirmer la réservation")}
             </Text>
           )}
         </TouchableOpacity>
