@@ -7,12 +7,15 @@ import { useColors } from "@/hooks/use-colors";
 import { useState } from "react";
 import { GlobalSearch } from "@/components/global-search";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInRight, FadeInUp } from "react-native-reanimated";
 import { getVenueImage } from "@/constants/venue-images";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "@/components/language-selector";
 import { useFeaturedVenues } from "@/hooks/use-venues";
 import type { Venue } from "@/lib/venues-service";
+
+type IoniconName = keyof typeof Ionicons.glyphMap;
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -23,13 +26,13 @@ export default function HomeScreen() {
   const { data: featuredVenues, loading: venuesLoading } = useFeaturedVenues(6);
   const isWeb = Platform.OS === "web";
 
-  const CATEGORIES = [
-    { id: "beach-clubs", icon: "🏖️", name: t("cat.beachClubs"),  description: t("cat.beachClubsDesc") },
-    { id: "fine-dining", icon: "🍽️", name: t("cat.fineDining"),  description: t("cat.fineDiningDesc") },
-    { id: "spas",        icon: "🧘",  name: t("cat.spas"),        description: t("cat.spasDesc") },
-    { id: "nightlife",   icon: "🎉",  name: t("cat.nightlife"),   description: t("cat.nightlifeDesc") },
-    { id: "events",      icon: "✨",  name: t("cat.events"),      description: t("cat.eventsDesc") },
-    { id: "shopping",    icon: "🌊",  name: t("cat.shopping"),    description: t("cat.shoppingDesc") },
+  const CATEGORIES: { id: string; icon: IoniconName; name: string; description: string }[] = [
+    { id: "beach-clubs", icon: "umbrella-outline",   name: t("cat.beachClubs"), description: t("cat.beachClubsDesc") },
+    { id: "fine-dining", icon: "restaurant-outline", name: t("cat.fineDining"), description: t("cat.fineDiningDesc") },
+    { id: "spas",        icon: "leaf-outline",       name: t("cat.spas"),       description: t("cat.spasDesc") },
+    { id: "nightlife",   icon: "wine-outline",       name: t("cat.nightlife"),  description: t("cat.nightlifeDesc") },
+    { id: "events",      icon: "sparkles-outline",   name: t("cat.events"),     description: t("cat.eventsDesc") },
+    { id: "shopping",    icon: "bag-handle-outline", name: t("cat.shopping"),   description: t("cat.shoppingDesc") },
   ];
 
   const renderCategoryItem = ({ item, index }: { item: typeof CATEGORIES[0]; index: number }) => (
@@ -45,7 +48,7 @@ export default function HomeScreen() {
           backgroundColor: colors.surface, borderRadius: 18, padding: 16,
           alignItems: "center", borderWidth: 1, borderColor: colors.border,
         }}>
-          <Text style={{ fontSize: 32, marginBottom: 8 }}>{item.icon}</Text>
+          <Ionicons name={item.icon} size={28} color={colors.foreground} style={{ marginBottom: 10 }} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: colors.foreground, textAlign: "center" }}>
             {item.name}
           </Text>
@@ -86,10 +89,11 @@ export default function HomeScreen() {
               {item.is_partner && (
                 <View style={{
                   position: "absolute", top: 10, right: 10,
-                  backgroundColor: "rgba(212,175,55,0.92)",
+                  backgroundColor: "rgba(10,14,19,0.55)",
+                  borderWidth: 1, borderColor: colors.primary,
                   borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
                 }}>
-                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#0a0a0f" }}>VIP</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: colors.primary, letterSpacing: 0.5 }}>VIP</Text>
                 </View>
               )}
             </View>
@@ -97,7 +101,7 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 15, fontWeight: "800", color: colors.foreground }} numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>
+              <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600" }}>
                 {item.category}
               </Text>
               <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }} numberOfLines={2}>
@@ -107,7 +111,7 @@ export default function HomeScreen() {
                 <Text style={{ color: "#F59E0B", fontSize: 13, fontWeight: "800" }}>
                   {"★".repeat(Math.round(item.rating))}
                 </Text>
-                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", marginLeft: 6 }}>
+                <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "700", marginLeft: 6 }}>
                   {item.rating}
                 </Text>
                 {item.price_range && (
@@ -137,7 +141,7 @@ export default function HomeScreen() {
           >
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 30, fontWeight: "900", color: "#D4AF37", letterSpacing: -0.5 }}>
+                <Text style={{ fontSize: 30, fontWeight: "900", color: colors.primary, letterSpacing: -0.5 }}>
                   Marbell'app
                 </Text>
                 <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
@@ -212,7 +216,7 @@ export default function HomeScreen() {
                 {t("home.trendingTitle")}
               </Text>
               <TouchableOpacity onPress={() => router.push("/venues")} activeOpacity={0.7}>
-                <Text style={{ fontSize: 13, color: "#D4AF37", fontWeight: "600" }}>
+                <Text style={{ fontSize: 13, color: colors.muted, fontWeight: "600" }}>
                   {t("common.seeAll")}
                 </Text>
               </TouchableOpacity>
@@ -220,7 +224,7 @@ export default function HomeScreen() {
 
             {venuesLoading ? (
               <View style={{ height: 220, justifyContent: "center", alignItems: "center" }}>
-                <ActivityIndicator color="#D4AF37" size="large" />
+                <ActivityIndicator color={colors.muted} size="large" />
               </View>
             ) : (
               <FlatList
@@ -241,7 +245,7 @@ export default function HomeScreen() {
           >
             <View style={{
               borderRadius: 24, overflow: "hidden",
-              borderWidth: 1, borderColor: "rgba(212,175,55,0.35)",
+              borderWidth: 1, borderColor: colors.border,
             }}>
               <Image
                 source={{ uri: "https://images.unsplash.com/photo-1566073771259-b4ad8b8f0517?auto=format&fit=crop&w=800&q=80" }}
@@ -249,7 +253,7 @@ export default function HomeScreen() {
                 contentFit="cover"
               />
               <View style={{ backgroundColor: "rgba(10,10,15,0.78)", padding: 24 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#D4AF37", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "rgba(248,244,236,0.55)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>
                   {t("home.forEstablishments")}
                 </Text>
                 <Text style={{ fontSize: 22, fontWeight: "900", color: "#fff", marginBottom: 8 }}>
@@ -262,11 +266,11 @@ export default function HomeScreen() {
                   activeOpacity={0.8}
                   onPress={() => router.push("/join-partner")}
                   style={{
-                    backgroundColor: "#D4AF37", borderRadius: 50, paddingVertical: 13,
+                    backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 13,
                     alignItems: "center", alignSelf: "flex-start", paddingHorizontal: 28,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "800", color: "#0a0a0f" }}>
+                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.background }}>
                     {t("home.becomePartner")}
                   </Text>
                 </TouchableOpacity>
