@@ -1,6 +1,6 @@
 import {
   ScrollView, Text, View, TouchableOpacity, TextInput,
-  ActivityIndicator, FlatList, Alert, Platform,
+  ActivityIndicator, FlatList, Alert, Platform, Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -40,6 +40,12 @@ const formatDisplayDate = (iso: string) =>
   });
 // Comparaison sûre sur des chaînes YYYY-MM-DD (ordre lexicographique = ordre temporel)
 const isPastDate = (iso: string) => iso < toISODate(new Date());
+
+// Montant de test fixe (en CENTIMES, attendu par Stripe). 5000 = 50,00 €.
+// TODO: remplacer par le montant réel (table/venue) plus tard.
+const TEST_AMOUNT_CENTS = 5000;
+const formatEur = (cents: number) =>
+  (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 
 // ── Table selector card ────────────────────────────────────────────
 function TableCard({
@@ -272,7 +278,7 @@ export default function BookingScreen() {
         return;
       }
 
-      await createBooking({
+      const created = await createBooking({
         user_id:             userId,
         venue_id:            venueUuidParam     || null,
         venue_name:          resolvedVenueName,
@@ -315,24 +321,36 @@ export default function BookingScreen() {
         }).catch((e) => console.warn("[booking] notification email failed:", e?.message));
       }
 
-      router.push({
-        pathname: "/booking-confirmation",
-        params: {
-          venueId,
-          venueName:  resolvedVenueName,
-          date,
-          time,
-          guests,
-          tableId:    selectedTable?.id   ?? "",
-          tableName:  selectedTable?.name ?? "",
-          tablePrice: selectedTable ? String(selectedTable.price_min) : "",
-          confirmationNumber: confirmNum,
+      // ── Paiement Stripe Checkout ───────────────────────────────────
+      // Crée la session côté serveur puis redirige vers la page Stripe.
+      // (Au retour, success_url renvoie vers /booking-confirmation ; le
+      //  webhook confirme la réservation après paiement.)
+      const { data: checkout, error: checkoutErr } = await supabase.functions.invoke(
+        "create-checkout-session",
+        {
+          body: {
+            bookingId: created.id,
+            venueId:   venueUuidParam || venueId,
+            amount:    TEST_AMOUNT_CENTS, // en centimes
+            currency:  "eur",
+          },
         },
-      });
+      );
+      const checkoutUrl = (checkout as { url?: string } | null)?.url;
+      if (checkoutErr || !checkoutUrl) {
+        throw new Error(checkoutErr?.message ?? "URL de paiement indisponible");
+      }
+
+      if (Platform.OS === "web") {
+        window.location.href = checkoutUrl;
+      } else {
+        await Linking.openURL(checkoutUrl);
+      }
+      // Redirection en cours — la réservation reste "pending" jusqu'au paiement.
     } catch (e: any) {
-      // L'enregistrement a échoué (erreur réseau / RLS) → libère le créneau réservé
+      // Échec d'enregistrement OU d'ouverture du paiement → libère le créneau
       if (selectedSlot) releaseSlot(selectedSlot.id).catch(() => {});
-      console.warn("[booking] createBooking failed:", e?.message);
+      console.warn("[booking] confirm/checkout failed:", e?.message);
       const msg = t("booking.saveFailed");
       if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
     } finally {
@@ -594,12 +612,23 @@ export default function BookingScreen() {
           />
         </View>
 
+        {/* ── Total à payer ───────────────────────────────────────── */}
+        <View style={[cardStyle, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+          <View>
+            <Text style={labelStyle}>{t("booking.total") || "TOTAL À PAYER"}</Text>
+            <Text style={{ fontSize: 11, color: "#666" }}>Montant de test</Text>
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: "#D4AF37" }}>
+            {formatEur(TEST_AMOUNT_CENTS)}
+          </Text>
+        </View>
+
         {/* ── Terms ───────────────────────────────────────────────── */}
         <View style={[cardStyle, { marginBottom: 28 }]}>
           <Text style={{ fontSize: 12, color: "#666", lineHeight: 18 }}>{t("booking.terms")}</Text>
         </View>
 
-        {/* ── Confirm ─────────────────────────────────────────────── */}
+        {/* ── Confirm & pay ───────────────────────────────────────── */}
         <TouchableOpacity
           onPress={handleConfirmBooking}
           disabled={isSubmitting}
@@ -614,9 +643,7 @@ export default function BookingScreen() {
             <ActivityIndicator color="#0a0a0f" />
           ) : (
             <Text style={{ color: "#0a0a0f", fontWeight: "800", fontSize: 16 }}>
-              {selectedTable
-                ? `${t("booking.confirmBtn")} · ${selectedTable.name}`
-                : t("booking.confirmBtn")}
+              {(t("booking.confirmAndPay") || "Confirmer et payer")} · {formatEur(TEST_AMOUNT_CENTS)}
             </Text>
           )}
         </TouchableOpacity>
