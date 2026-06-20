@@ -379,9 +379,11 @@ export default function ProfileScreen() {
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 14, fontWeight: "800", color: colors.foreground }}>Comment gagner des points VIP ?</Text>
               {[
-                { n: "1", text: "📸 Publie une photo sur Instagram depuis Marbella avec #marbellappvip dans la légende" },
-                { n: "2", text: "🔗 Pour copier le lien du post : ouvre le post → appuie sur ••• (3 points) en haut à droite → « Copier le lien »" },
-                { n: "3", text: "📋 Colle le lien ci-dessous et envoie" },
+                { n: "1", text: "👥 Suis @marbellapp sur Instagram (obligatoire — c'est ainsi qu'on peut voir ton post même si ton compte est privé)" },
+                { n: "2", text: "📸 Publie une vraie photo ou un vrai post pris sur place, dans l'établissement que tu as visité à Marbella. Les montages, reposts ou photos génériques ne seront pas validés." },
+                { n: "3", text: "#️⃣ Ajoute #marbellappvip dans ta légende" },
+                { n: "4", text: "🔗 Ouvre le post → ••• → « Copier le lien »" },
+                { n: "5", text: "📋 Colle le lien ci-dessous et envoie" },
               ].map((s) => (
                 <View key={s.n} style={{
                   flexDirection: "row", gap: 10, alignItems: "flex-start",
@@ -399,17 +401,18 @@ export default function ProfileScreen() {
             {/* Conditions */}
             <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 4 }}>
               <Text style={{ fontSize: 12, color: colors.foreground, fontWeight: "700", marginBottom: 2 }}>Conditions à respecter</Text>
-              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>1. Postez avec #marbellappvip</Text>
-              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>2. Votre compte Instagram doit être public</Text>
-              <TouchableOpacity
-                onPress={() => Linking.openURL("https://www.instagram.com/marbellapp").catch(() => {})}
-                activeOpacity={0.7}
-                style={{ marginTop: 6 }}
-              >
-                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "700", textDecorationLine: "underline" }}>
-                  📸 instagram.com/marbellapp
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>
+                • Je suis{" "}
+                <Text
+                  style={{ color: colors.primary, fontWeight: "700" }}
+                  onPress={() => Linking.openURL("https://www.instagram.com/marbellapp").catch(() => {})}
+                >
+                  @marbellapp
                 </Text>
-              </TouchableOpacity>
+                {" "}sur Instagram
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>• Mon post contient #marbellappvip</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>• Ma vraie photo ou mon vrai post a été pris sur place dans l'établissement visité</Text>
             </View>
 
             {/* Case à cocher obligatoire */}
