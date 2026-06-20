@@ -36,6 +36,7 @@ export default function ProfileScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [postUrl, setPostUrl] = useState("");
   const [igHandle, setIgHandle] = useState("");
+  const [agreed, setAgreed] = useState(false);
 
   const reloadVip = () => {
     if (!user?.id) { setVipStatus(null); return; }
@@ -51,10 +52,11 @@ export default function ProfileScreen() {
   const vipNotify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
   const handleSubmitPost = async () => {
     if (!postUrl.trim()) { vipNotify("Colle l'URL de ton post Instagram."); return; }
+    if (!agreed) { vipNotify("Coche la case confirmant que tu as respecté les conditions."); return; }
     setSubmitting(true);
     try {
       await submitPost(postUrl, igHandle);
-      setPostUrl(""); setIgHandle(""); setShowSubmit(false);
+      setPostUrl(""); setIgHandle(""); setAgreed(false); setShowSubmit(false);
       reloadVip();
       vipNotify("Post soumis ! Il sera validé par l'équipe.");
     } catch (e: any) {
@@ -216,7 +218,7 @@ export default function ProfileScreen() {
         <View style={{ paddingHorizontal: 20, marginTop: 22 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>Statut VIP</Text>
-            <TouchableOpacity onPress={() => setShowSubmit(true)} activeOpacity={0.8}
+            <TouchableOpacity onPress={() => { setAgreed(false); setShowSubmit(true); }} activeOpacity={0.8}
               style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 }}>
               <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>＋ Soumettre un post</Text>
             </TouchableOpacity>
@@ -371,9 +373,42 @@ export default function ProfileScreen() {
               <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Soumettre un post</Text>
               <TouchableOpacity onPress={() => setShowSubmit(false)}><Text style={{ color: colors.primary, fontSize: 16 }}>✕</Text></TouchableOpacity>
             </View>
-            <Text style={{ fontSize: 12, color: colors.muted }}>
-              Publie ta photo avec #marbellappvip, puis colle le lien ici. Validé par l'équipe.
-            </Text>
+            {/* Conditions */}
+            <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.foreground, fontWeight: "700", marginBottom: 2 }}>Conditions à respecter</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>1. Suivez @marbellapp sur Instagram</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>2. Postez avec #marbellappvip</Text>
+              <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>3. Votre compte Instagram doit être public</Text>
+              <TouchableOpacity
+                onPress={() => Linking.openURL("https://www.instagram.com/marbellapp").catch(() => {})}
+                activeOpacity={0.7}
+                style={{ marginTop: 6 }}
+              >
+                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "700", textDecorationLine: "underline" }}>
+                  📸 instagram.com/marbellapp
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Case à cocher obligatoire */}
+            <TouchableOpacity
+              onPress={() => setAgreed((v) => !v)}
+              activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <View style={{
+                width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+                borderColor: agreed ? colors.primary : colors.border,
+                backgroundColor: agreed ? colors.primary : "transparent",
+                alignItems: "center", justifyContent: "center",
+              }}>
+                {agreed ? <Text style={{ color: "#0A0E13", fontSize: 13, fontWeight: "900" }}>✓</Text> : null}
+              </View>
+              <Text style={{ fontSize: 13, color: colors.foreground, flex: 1 }}>
+                J'ai respecté toutes les conditions
+              </Text>
+            </TouchableOpacity>
+
             <View>
               <Text style={{ fontSize: 10, color: colors.muted, fontWeight: "700", marginBottom: 4 }}>URL DU POST *</Text>
               <TextInput value={postUrl} onChangeText={setPostUrl} placeholder="https://instagram.com/p/..." placeholderTextColor="#555" autoCapitalize="none"
@@ -384,9 +419,9 @@ export default function ProfileScreen() {
               <TextInput value={igHandle} onChangeText={setIgHandle} placeholder="@ton_compte" placeholderTextColor="#555" autoCapitalize="none"
                 style={{ backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border }} />
             </View>
-            <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !postUrl.trim()} activeOpacity={0.85}
-              style={{ backgroundColor: postUrl.trim() ? colors.primary : "#333", borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
-              {submitting ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+            <TouchableOpacity onPress={handleSubmitPost} disabled={submitting || !postUrl.trim() || !agreed} activeOpacity={0.85}
+              style={{ backgroundColor: (postUrl.trim() && agreed) ? colors.primary : "#333", borderRadius: 50, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
+              {submitting ? <ActivityIndicator color="#0A0E13" /> : <Text style={{ color: (postUrl.trim() && agreed) ? "#0A0E13" : "#777", fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
             </TouchableOpacity>
           </View>
         </View>
