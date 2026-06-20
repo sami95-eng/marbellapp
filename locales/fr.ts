@@ -139,6 +139,8 @@ const fr = {
   "bookingConfirm.earnBadgesDesc": "Débloquez des récompenses et succès exclusifs",
   "bookingConfirm.backHome": "Retour à l'accueil",
   "bookingConfirm.viewBookings": "Voir mes réservations",
+  "bookingConfirm.amountPaid": "MONTANT PAYÉ",
+  "bookingConfirm.detailsError": "Impossible de charger les détails de ta réservation.",
 
   // ── Bookings List ─────────────────────────────────────────────────
   "bookings.title": "Mes réservations",

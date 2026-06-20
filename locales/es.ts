@@ -139,6 +139,8 @@ const es = {
   "bookingConfirm.earnBadgesDesc": "Desbloquea logros y recompensas exclusivas",
   "bookingConfirm.backHome": "Volver al inicio",
   "bookingConfirm.viewBookings": "Ver mis reservas",
+  "bookingConfirm.amountPaid": "IMPORTE PAGADO",
+  "bookingConfirm.detailsError": "No se pudieron cargar los detalles de tu reserva.",
 
   // ── Bookings List ─────────────────────────────────────────────────
   "bookings.title": "Mis reservas",

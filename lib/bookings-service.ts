@@ -37,6 +37,21 @@ export async function getUserBookings(userId: string): Promise<Booking[]> {
   return (data ?? []) as Booking[];
 }
 
+/**
+ * Récupère une réservation par son id. La RLS (propriétaire) autorise la
+ * lecture de sa propre réservation — utilisé au retour de Stripe Checkout.
+ */
+export async function getBookingById(id: string): Promise<Booking | null> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data as Booking | null) ?? null;
+}
+
 export async function createBooking(booking: NewBooking): Promise<Booking> {
   console.log("[bookings-service] createBooking payload:", JSON.stringify(booking));
 

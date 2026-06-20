@@ -139,6 +139,8 @@ const en = {
   "bookingConfirm.earnBadgesDesc": "Unlock exclusive achievements and rewards",
   "bookingConfirm.backHome": "Back to Home",
   "bookingConfirm.viewBookings": "View My Bookings",
+  "bookingConfirm.amountPaid": "AMOUNT PAID",
+  "bookingConfirm.detailsError": "Couldn't load your booking details.",
 
   // ── Bookings List ─────────────────────────────────────────────────
   "bookings.title": "My Bookings",

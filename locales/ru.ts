@@ -139,6 +139,8 @@ const ru = {
   "bookingConfirm.earnBadgesDesc": "Открывайте эксклюзивные достижения и награды",
   "bookingConfirm.backHome": "На главную",
   "bookingConfirm.viewBookings": "Мои бронирования",
+  "bookingConfirm.amountPaid": "ОПЛАЧЕНО",
+  "bookingConfirm.detailsError": "Не удалось загрузить детали бронирования.",
 
   // ── Bookings List ─────────────────────────────────────────────────
   "bookings.title": "Мои бронирования",

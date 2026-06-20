@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { getBookingById, type Booking } from "@/lib/bookings-service";
 
 export default function BookingConfirmationScreen() {
   const { t } = useTranslation();
@@ -23,26 +24,56 @@ export default function BookingConfirmationScreen() {
   // Statut de paiement : interrogé via get-checkout-status quand on revient de
   // Stripe Checkout (success_url = .../booking-confirmation?session_id=...).
   type PayState = "none" | "checking" | "paid" | "pending";
-  const [payState, setPayState] = useState<PayState>(session_id ? "checking" : "none");
+  const fromStripe = !!session_id;
+  const [payState, setPayState] = useState<PayState>(fromStripe ? "checking" : "none");
+
+  // Détails réels de la réservation, récupérés après retour de Stripe Checkout
+  // via le bookingId renvoyé par get-checkout-status.
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(fromStripe);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [amountPaid, setAmountPaid] = useState<number | null>(null); // centimes
+  const [currency, setCurrency] = useState("eur");
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!session_id) return;
     let cancelled = false;
+    setPayState("checking");
+    setDetailsLoading(true);
+    setDetailsError(null);
     (async () => {
       try {
         const { data, error } = await supabase.functions.invoke("get-checkout-status", {
           body: { sessionId: session_id },
         });
         if (cancelled) return;
-        const d = data as { paymentStatus?: string; status?: string } | null;
+        const d = data as {
+          paymentStatus?: string; status?: string;
+          bookingId?: string | null; amountTotal?: number | null; currency?: string;
+        } | null;
         const paid = !error && (d?.paymentStatus === "paid" || d?.status === "complete");
         setPayState(paid ? "paid" : "pending");
-      } catch {
-        if (!cancelled) setPayState("pending");
+        if (d?.amountTotal != null) setAmountPaid(d.amountTotal);
+        if (d?.currency) setCurrency(d.currency);
+
+        // Récupère les vraies données de la réservation depuis Supabase.
+        if (error || !d?.bookingId) { setDetailsError(t("bookingConfirm.detailsError")); return; }
+        const b = await getBookingById(d.bookingId);
+        if (cancelled) return;
+        if (!b) { setDetailsError(t("bookingConfirm.detailsError")); return; }
+        setBooking(b);
+      } catch (e: any) {
+        if (!cancelled) {
+          setPayState("pending");
+          setDetailsError(e?.message ?? t("bookingConfirm.detailsError"));
+        }
+      } finally {
+        if (!cancelled) setDetailsLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [session_id]);
+  }, [session_id, retryKey, t]);
 
   // Use passed venueName, fall back to a lookup, then to a generic label
   const VENUE_NAME_MAP: Record<string, string> = {
@@ -53,8 +84,23 @@ export default function BookingConfirmationScreen() {
     "skina": "Skina", "messina": "Messina", "ta-kumi": "Ta-Kumi",
     "finca-cortesin-spa": "Finca Cortesín Spa",
   };
-  const venueName = venueNameParam || VENUE_NAME_MAP[venueId ?? ""] || "Exclusive Venue";
-  const confirmNum = confirmationNumber || `MSS-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  const paramVenueName = venueNameParam || VENUE_NAME_MAP[venueId ?? ""] || "Exclusive Venue";
+
+  // Valeurs affichées : retour Stripe → données réelles ; sinon → params de navigation.
+  const dispVenue      = fromStripe ? (booking?.venue_name ?? paramVenueName) : paramVenueName;
+  const dispDate       = fromStripe ? (booking?.date ?? "") : date;
+  const dispTime       = fromStripe ? (booking?.time ?? "") : time;
+  const dispGuests     = fromStripe ? (booking?.guests != null ? String(booking.guests) : "") : guests;
+  const dispTable      = fromStripe ? (booking?.table_name ?? null) : (tableName ?? null);
+  const dispTablePrice = fromStripe
+    ? (booking?.table_price != null ? String(booking.table_price) : "")
+    : (tablePrice ?? "");
+  const dispConfirm    = fromStripe
+    ? (booking?.confirmation_number ?? confirmationNumber ?? "—")
+    : (confirmationNumber || `MSS-${Date.now().toString(36).toUpperCase().slice(-6)}`);
+
+  const formatMoney = (cents: number) =>
+    (cents / 100).toLocaleString(undefined, { style: "currency", currency: (currency || "eur").toUpperCase() });
 
   return (
     <ScreenContainer className="px-6">
@@ -108,72 +154,110 @@ export default function BookingConfirmationScreen() {
           )}
         </View>
 
-        {/* Détails + n° : seulement hors retour Stripe (params présents). */}
-        {!session_id && (<>
-        {/* Confirmation Details */}
-        <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
-          <Text className="text-lg font-bold text-foreground mb-4">
-            {t("bookingConfirm.reservationDetails")}
-          </Text>
-
-          <View className="mb-4">
-            <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.venue")}</Text>
-            <Text className="text-base font-semibold text-foreground">
-              {venueName}
-            </Text>
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.date")}</Text>
-            <Text className="text-base font-semibold text-foreground">{date}</Text>
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.time")}</Text>
-            <Text className="text-base font-semibold text-foreground">{time}</Text>
-          </View>
-
-          <View>
-            <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.guests")}</Text>
-            <Text className="text-base font-semibold text-foreground">
-              {guests} {guests === "1" ? t("common.person") : t("common.people")}
-            </Text>
-          </View>
-
-          {tableName ? (
-            <View className="mt-4 pt-4 border-t border-border">
-              <Text className="text-xs text-muted font-semibold mb-1">TABLE</Text>
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Text style={{ fontSize: 14 }}>🪑</Text>
-                  <Text className="text-base font-semibold text-foreground">{tableName}</Text>
-                </View>
-                {tablePrice && tablePrice !== "" && (
-                  <View style={{
-                    backgroundColor: "rgba(212,175,55,0.15)",
-                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
-                  }}>
-                    <Text style={{ color: "#D4AF37", fontWeight: "700", fontSize: 13 }}>
-                      From €{parseInt(tablePrice).toLocaleString()}
-                    </Text>
-                  </View>
-                )}
+        {/* Détails de la réservation — vraies données au retour de Stripe. */}
+        {fromStripe && detailsLoading ? (
+          /* Skeleton pendant le chargement des détails */
+          <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
+            <View className="h-5 rounded bg-border mb-5" style={{ width: "55%" }} />
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} className="mb-4">
+                <View className="h-3 rounded bg-border mb-2" style={{ width: "30%" }} />
+                <View className="h-4 rounded bg-border" style={{ width: "70%" }} />
               </View>
-            </View>
-          ) : null}
-        </View>
+            ))}
+          </View>
+        ) : fromStripe && detailsError && !booking ? (
+          /* Échec de chargement des détails (le paiement reste pris en compte) */
+          <View className="bg-surface rounded-2xl p-6 mb-6 border border-border items-center">
+            <Text style={{ fontSize: 28, marginBottom: 8 }}>⚠️</Text>
+            <Text className="text-sm text-muted mb-4" style={{ textAlign: "center" }}>
+              {detailsError}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setRetryKey((k) => k + 1)}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.retry")}
+              className="bg-primary rounded-full px-6 py-2.5"
+              activeOpacity={0.8}
+            >
+              <Text className="font-bold" style={{ color: "#0A0E13" }}>{t("common.retry")}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* Confirmation Details */}
+            <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
+              <Text className="text-lg font-bold text-foreground mb-4">
+                {t("bookingConfirm.reservationDetails")}
+              </Text>
 
-        {/* Confirmation Number */}
-        <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
-          <Text className="text-xs text-muted font-semibold mb-2">
-            {t("bookingConfirm.confirmationNumber")}
-          </Text>
-          <Text className="text-2xl font-bold text-primary">{confirmNum}</Text>
-          <Text className="text-xs text-muted mt-2">
-            {t("bookingConfirm.saveNumber")}
-          </Text>
-        </View>
-        </>)}
+              <View className="mb-4">
+                <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.venue")}</Text>
+                <Text className="text-base font-semibold text-foreground">
+                  {dispVenue}
+                </Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.date")}</Text>
+                <Text className="text-base font-semibold text-foreground">{dispDate || "—"}</Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.time")}</Text>
+                <Text className="text-base font-semibold text-foreground">{dispTime || "—"}</Text>
+              </View>
+
+              <View>
+                <Text className="text-xs text-muted font-semibold mb-1">{t("bookingConfirm.guests")}</Text>
+                <Text className="text-base font-semibold text-foreground">
+                  {dispGuests || "—"}{dispGuests ? ` ${dispGuests === "1" ? t("common.person") : t("common.people")}` : ""}
+                </Text>
+              </View>
+
+              {dispTable ? (
+                <View className="mt-4 pt-4 border-t border-border">
+                  <Text className="text-xs text-muted font-semibold mb-1">TABLE</Text>
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-row items-center gap-2">
+                      <Text style={{ fontSize: 14 }}>🪑</Text>
+                      <Text className="text-base font-semibold text-foreground">{dispTable}</Text>
+                    </View>
+                    {dispTablePrice && dispTablePrice !== "" && (
+                      <View style={{
+                        backgroundColor: "rgba(212,175,55,0.15)",
+                        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
+                      }}>
+                        <Text style={{ color: "#D4AF37", fontWeight: "700", fontSize: 13 }}>
+                          From €{parseInt(dispTablePrice).toLocaleString()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Montant payé — retour Stripe, paiement confirmé */}
+              {payState === "paid" && amountPaid != null && (
+                <View className="mt-4 pt-4 border-t border-border flex-row items-center justify-between">
+                  <Text className="text-xs text-muted font-semibold">{t("bookingConfirm.amountPaid")}</Text>
+                  <Text className="text-base font-bold text-primary">{formatMoney(amountPaid)}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Confirmation Number */}
+            <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
+              <Text className="text-xs text-muted font-semibold mb-2">
+                {t("bookingConfirm.confirmationNumber")}
+              </Text>
+              <Text className="text-2xl font-bold text-primary">{dispConfirm}</Text>
+              <Text className="text-xs text-muted mt-2">
+                {t("bookingConfirm.saveNumber")}
+              </Text>
+            </View>
+          </>
+        )}
 
         {/* What to Expect */}
         <View className="bg-surface rounded-2xl p-6 mb-6 border border-border">
