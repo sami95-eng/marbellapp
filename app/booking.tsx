@@ -264,7 +264,8 @@ export default function BookingScreen() {
         ? await base.eq("id", venueUuidParam).maybeSingle()
         : await base.eq("slug", venueId).maybeSingle();
       if (!cancelled) {
-        setVenueBasePriceEur((data as { avg_price_eur?: number } | null)?.avg_price_eur ?? null);
+        const nextPrice = (data as { avg_price_eur?: number } | null)?.avg_price_eur ?? null;
+        setVenueBasePriceEur(nextPrice);
       }
     })();
     return () => { cancelled = true; };
@@ -421,6 +422,18 @@ export default function BookingScreen() {
           throw new Error(checkoutErr?.message ?? "URL de paiement indisponible");
         }
         if (Platform.OS === "web") {
+          // La redirection externe vers Stripe puis le retour rechargent la page :
+          // on sauvegarde la session pour pouvoir la restaurer sur l'écran de
+          // confirmation (sinon la lecture RLS de la réservation échoue).
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token && session?.refresh_token) {
+              window.localStorage.setItem(
+                "marbellapp_session_backup",
+                JSON.stringify({ access_token: session.access_token, refresh_token: session.refresh_token }),
+              );
+            }
+          } catch { /* best-effort */ }
           window.location.href = checkoutUrl;
         } else {
           await Linking.openURL(checkoutUrl);

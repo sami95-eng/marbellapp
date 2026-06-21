@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
@@ -44,6 +44,27 @@ export default function BookingConfirmationScreen() {
     setDetailsError(null);
     (async () => {
       try {
+        // La redirection externe vers Stripe peut faire perdre la session au
+        // retour (rechargement de page). On la restaure depuis la sauvegarde
+        // locale pour que la lecture RLS de la réservation fonctionne.
+        if (Platform.OS === "web") {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              const backup = window.localStorage.getItem("marbellapp_session_backup");
+              if (backup) {
+                const { access_token, refresh_token } = JSON.parse(backup) as {
+                  access_token?: string; refresh_token?: string;
+                };
+                if (access_token && refresh_token) {
+                  await supabase.auth.setSession({ access_token, refresh_token });
+                }
+              }
+            }
+            window.localStorage.removeItem("marbellapp_session_backup");
+          } catch { /* best-effort */ }
+        }
+
         const { data, error } = await supabase.functions.invoke("get-checkout-status", {
           body: { sessionId: session_id },
         });
