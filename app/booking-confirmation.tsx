@@ -325,7 +325,7 @@ export default function BookingConfirmationScreen() {
         {/* CTA Buttons */}
         <View className="gap-3 mb-8">
           <TouchableOpacity
-            onPress={() => router.push("/(tabs)")}
+            onPress={() => router.replace("/(tabs)")}
             className="bg-primary rounded-full py-4 items-center"
             activeOpacity={0.8}
           >
