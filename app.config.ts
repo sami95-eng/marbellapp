@@ -96,7 +96,13 @@ const config: ExpoConfig = {
         photosPermission: "Autorise $(PRODUCT_NAME) à accéder à tes photos pour illustrer ton établissement.",
       },
     ],
-    "@stripe/stripe-react-native",
+    [
+      "@stripe/stripe-react-native",
+      {
+        merchantIdentifier: `merchant.${bundleId}`,
+        enableGooglePay: false,
+      },
+    ],
     [
       "expo-audio",
       {
