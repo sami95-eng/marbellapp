@@ -1,7 +1,15 @@
+const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
+
+// NativeWind / react-native-css-interop writes its compiled output here;
+// Metro must watch it so style changes are picked up during dev.
+config.watchFolders = [
+  ...(config.watchFolders ?? []),
+  path.resolve(__dirname, "node_modules/react-native-css-interop/.cache"),
+];
 
 // Enable package.json "exports" field so @supabase/supabase-js
 // uses its browser build on web instead of the Node.js build
