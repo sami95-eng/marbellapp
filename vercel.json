@@ -1,6 +1,6 @@
 {
   "outputDirectory": "dist",
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "mkdir -p node_modules/react-native-css-interop/.cache && touch node_modules/react-native-css-interop/.cache/web.css && npx expo export --platform web",
   "framework": null,
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
