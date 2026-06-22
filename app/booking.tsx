@@ -230,9 +230,6 @@ export default function BookingScreen() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
 
-  // Prix de base de la venue (avg_price_eur, en euros) — utilisé si aucune table.
-  const [venueBasePriceEur, setVenueBasePriceEur] = useState<number | null>(null);
-
   // Réduction VIP de l'utilisateur (palier Instagram).
   const [vipDiscountPct, setVipDiscountPct] = useState(0);
   const [vipTierLabel, setVipTierLabel] = useState("");
@@ -253,24 +250,6 @@ export default function BookingScreen() {
 
   const hasSlotSystem = !isDemoMode && !!venueUuidParam;
 
-  // Charge le prix moyen de la venue (avg_price_eur) pour le cas "sans table".
-  useEffect(() => {
-    if (isDemoMode) { setVenueBasePriceEur(null); return; }
-    if (!venueUuidParam && !venueId) { setVenueBasePriceEur(null); return; }
-    let cancelled = false;
-    (async () => {
-      const base = supabase.from("venues").select("avg_price_eur");
-      const { data } = venueUuidParam
-        ? await base.eq("id", venueUuidParam).maybeSingle()
-        : await base.eq("slug", venueId).maybeSingle();
-      if (!cancelled) {
-        const nextPrice = (data as { avg_price_eur?: number } | null)?.avg_price_eur ?? null;
-        setVenueBasePriceEur(nextPrice);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [venueUuidParam, venueId, isDemoMode]);
-
   // Charge la réduction VIP de l'utilisateur (palier Instagram).
   useEffect(() => {
     if (isDemoMode || !user?.id) return;
@@ -281,9 +260,9 @@ export default function BookingScreen() {
     return () => { cancelled = true; };
   }, [user?.id, isDemoMode]);
 
-  // Montant à payer : table sélectionnée → price_min ; sinon prix moyen venue.
-  // null = aucun prix en base → "Prix sur demande", pas de paiement Stripe.
-  const priceEur: number | null = selectedTable ? selectedTable.price_min : venueBasePriceEur;
+  // Montant à payer : uniquement si une table est sélectionnée (price_min).
+  // Sans table → amountCents null → réservation "pending" sans paiement Stripe.
+  const priceEur: number | null = selectedTable ? selectedTable.price_min : null;
   const baseCents: number | null =
     priceEur != null && priceEur > 0 ? Math.round(priceEur * 100) : null;
   // Réduction VIP appliquée automatiquement au montant facturé.
@@ -727,9 +706,7 @@ export default function BookingScreen() {
           <View style={{ flex: 1 }}>
             <Text style={labelStyle}>{t("booking.total") || "TOTAL À PAYER"}</Text>
             <Text style={{ fontSize: 11, color: colors.muted }}>
-              {payable
-                ? (selectedTable ? `Table · ${selectedTable.name}` : "Prix moyen indicatif")
-                : "Paiement non requis"}
+              {payable && selectedTable ? `Table · ${selectedTable.name}` : "Paiement non requis"}
             </Text>
             {baseCents != null && vipDiscountPct > 0 ? (
               <Text style={{ fontSize: 11, color: colors.success, fontWeight: "700", marginTop: 4 }}>
