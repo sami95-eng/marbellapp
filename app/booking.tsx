@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { createBooking } from "@/lib/bookings-service";
 import { getAvailableSlots, bookSlot, releaseSlot, type AvailabilitySlot } from "@/lib/availability-service";
+import { getVenueSlotWindow } from "@/lib/venues-service";
 import { getUserVipStatus } from "@/lib/vip-service";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -45,6 +46,16 @@ const formatDisplayDate = (iso: string) =>
   });
 // Comparaison sûre sur des chaînes YYYY-MM-DD (ordre lexicographique = ordre temporel)
 const isPastDate = (iso: string) => iso < toISODate(new Date());
+
+// Minutes depuis minuit pour comparer des "HH:MM".
+const timeToMin = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+// Un créneau est-il dans la fenêtre d'ouverture ? (gère le passage de minuit, ex. 23:00 → 06:00)
+const inOpeningWindow = (time: string, start: string, end: string) => {
+  const s = timeToMin(start);
+  let e = timeToMin(end); if (e <= s) e += 1440;
+  let t = timeToMin(time); if (t < s) t += 1440;
+  return t >= s && t < e;
+};
 
 // Formate un montant en centimes vers une chaîne € FR (5000 → "50,00 €").
 const formatEur = (cents: number) =>
@@ -248,7 +259,24 @@ export default function BookingScreen() {
     return () => { cancelled = true; };
   }, [venueUuidParam, date, isDemoMode]);
 
+  // Fenêtre d'ouverture (slot_start/slot_end) de l'établissement.
+  const [slotWindow, setSlotWindow] = useState<{ slot_start: string; slot_end: string } | null>(null);
+  useEffect(() => {
+    if (isDemoMode || !venueUuidParam) { setSlotWindow(null); return; }
+    let cancelled = false;
+    getVenueSlotWindow(venueUuidParam)
+      .then((w) => { if (!cancelled && w) { setSlotWindow(w); setTime(w.slot_start); } })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [venueUuidParam, isDemoMode]);
+
   const hasSlotSystem = !isDemoMode && !!venueUuidParam;
+
+  // N'affiche que les créneaux dans la fenêtre d'ouverture réelle
+  // (ex. un club ouvrant à 23h ne propose pas de créneau à 19h).
+  const windowSlots = slotWindow
+    ? slots.filter((s) => inOpeningWindow(s.time, slotWindow.slot_start, slotWindow.slot_end))
+    : slots;
 
   // Charge la réduction VIP de l'utilisateur (palier Instagram).
   useEffect(() => {
@@ -295,7 +323,7 @@ export default function BookingScreen() {
     }
 
     // Si l'établissement gère des créneaux, il faut en choisir un disponible
-    if (hasSlotSystem && slots.length > 0 && !selectedSlot) {
+    if (hasSlotSystem && windowSlots.length > 0 && !selectedSlot) {
       const msg = t("booking.selectSlotRequired");
       if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
       return;
@@ -590,13 +618,13 @@ export default function BookingScreen() {
               <View style={{ height: 44, justifyContent: "center" }}>
                 <ActivityIndicator color={colors.muted} />
               </View>
-            ) : slots.length === 0 ? (
+            ) : windowSlots.length === 0 ? (
               <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>
                 {t("booking.noSlots")}
               </Text>
             ) : (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
-                {slots.map((s) => {
+                {windowSlots.map((s) => {
                   const sel = selectedSlot?.id === s.id;
                   const left = s.max_capacity - s.current_bookings;
                   return (
@@ -624,7 +652,7 @@ export default function BookingScreen() {
         )}
 
         {/* ── Time (saisie libre — si pas de système de créneaux) ──── */}
-        {(!hasSlotSystem || slots.length === 0) && (
+        {(!hasSlotSystem || windowSlots.length === 0) && (
           <View style={cardStyle}>
             <Text style={labelStyle}>{t("booking.time")}</Text>
             <TextInput

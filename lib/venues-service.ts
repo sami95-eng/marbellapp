@@ -148,6 +148,21 @@ export async function getVenueCovers(): Promise<Record<string, string>> {
   return map;
 }
 
+/** Fenêtre d'ouverture (slot_start/slot_end) d'une venue, par UUID. */
+export async function getVenueSlotWindow(
+  venueId: string
+): Promise<{ slot_start: string; slot_end: string } | null> {
+  const { data, error } = await supabase
+    .from("venues")
+    .select("slot_start, slot_end")
+    .eq("id", venueId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const d = data as { slot_start?: string | null; slot_end?: string | null };
+  return { slot_start: d.slot_start ?? "10:00", slot_end: d.slot_end ?? "00:00" };
+}
+
 /** Liste simplifiée de toutes les venues + config créneaux (sélecteur admin) */
 export async function getAllVenuesBasic(): Promise<VenueBasic[]> {
   const { data, error } = await supabase
