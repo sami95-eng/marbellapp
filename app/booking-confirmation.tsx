@@ -100,7 +100,7 @@ export default function BookingConfirmationScreen() {
   const VENUE_NAME_MAP: Record<string, string> = {
     "ocean-club": "Ocean Club Marbella", "nikki-beach": "Nikki Beach Marbella",
     "playa-padre": "Playa Padre", "opium-beach": "Opium Beach Club",
-    "la-bombonniere": "La Bombonnière", "mirage-nightclub": "Mirage Nightclub",
+    "bonbonniere-marbella": "Bonbonniere Marbella", "mirage-nightclub": "Mirage Nightclub",
     "starlite-festival": "Starlite Auditorium", "lena-marbella": "Leña by Dani García",
     "skina": "Skina", "messina": "Messina", "ta-kumi": "Ta-Kumi",
     "finca-cortesin-spa": "Finca Cortesín Spa",

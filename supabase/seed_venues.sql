@@ -378,18 +378,18 @@ ON CONFLICT (slug) DO UPDATE SET
   rating = EXCLUDED.rating;
 
 -- =================================================================
--- LA BOMBONNIÈRE (ex-Olivia Valère)
+-- BONBONNIERE MARBELLA (ex-Olivia Valère)
 -- =================================================================
 INSERT INTO public.venues (slug, name, group_name, category, description, address, phone, website, opening_hours, lat, lng, instagram_handle, cover_image_url, images, rating, price_range, avg_price_eur, is_partner, is_active)
 VALUES
 
-('la-bombonniere', 'La Bombonnière', 'La Bombonnière',
+('bonbonniere-marbella', 'Bonbonniere Marbella', 'Bonbonniere Marbella',
  'Nightlife',
- 'La discoteca más legendaria de Marbella desde 1985. Arquitectura inspirada en la Alhambra, un DJ booth que ha acogido a los mejores del mundo y una clientela de realeza, celebrities y élite internacional. Imprescindible.',
+ 'Luxury nightclub on the Golden Mile. The international nightlife phenomenon from Mykonos and Tulum lands in Marbella in the legendary former Olivia Valere space. Brutalist-Oriental design, world-class DJs.',
  'Carretera de Istán km 0.8, Marbella', '+34 952 82 88 61',
  'https://www.oliviavalere.com', '00:00 – 06:00 (jue–sáb, jul–ago)',
  36.5122, -4.8955,
- '@oliviavalere_official',
+ 'bonbonniere.marbella',
  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80',
  ARRAY[
    'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80',
