@@ -75,7 +75,6 @@ export default function ProfileScreen() {
 
   const STATS: { label: string; value: string; icon: IoniconName }[] = [
     { label: t("profile.experiences"), value: completedCount > 0 ? String(completedCount) : "0", icon: "sparkles-outline" },
-    { label: t("profile.photos"),        value: "47", icon: "camera-outline" },
     { label: t("profile.partnerPosts"),  value: vipStatus ? String(vipStatus.post_count) : "0", icon: "pricetag-outline" },
   ];
 

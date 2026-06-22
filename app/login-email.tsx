@@ -111,6 +111,11 @@ export default function LoginEmailScreen() {
               ))}
             </View>
 
+            {/* Aide contextuelle : guide l'utilisateur selon le mode choisi */}
+            <Text style={{ fontSize: 12, color: "#888", textAlign: "center", marginTop: -4 }}>
+              {mode === "signin" ? t("loginEmail.signInHint") : t("loginEmail.signUpHint")}
+            </Text>
+
             {/* Fields */}
             <View style={{ gap: 12 }}>
               {mode === "signup" && (

@@ -378,12 +378,12 @@ ON CONFLICT (slug) DO UPDATE SET
   rating = EXCLUDED.rating;
 
 -- =================================================================
--- OLIVIA VALERE
+-- LA BOMBONNIÈRE (ex-Olivia Valère)
 -- =================================================================
 INSERT INTO public.venues (slug, name, group_name, category, description, address, phone, website, opening_hours, lat, lng, instagram_handle, cover_image_url, images, rating, price_range, avg_price_eur, is_partner, is_active)
 VALUES
 
-('olivia-valere', 'Olivia Valere', 'Olivia Valere Group',
+('la-bombonniere', 'La Bombonnière', 'La Bombonnière',
  'Nightlife',
  'La discoteca más legendaria de Marbella desde 1985. Arquitectura inspirada en la Alhambra, un DJ booth que ha acogido a los mejores del mundo y una clientela de realeza, celebrities y élite internacional. Imprescindible.',
  'Carretera de Istán km 0.8, Marbella', '+34 952 82 88 61',
