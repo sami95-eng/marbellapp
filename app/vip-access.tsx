@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Text,
   View,
@@ -13,6 +13,7 @@ import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useTranslation } from "react-i18next";
+import { getVenueCovers } from "@/lib/venues-service";
 
 // --- Types ---
 type VipCategory = "tables" | "discounts" | "members";
@@ -172,7 +173,7 @@ const EVENT_DISCOUNTS: EventDiscount[] = [
     id: "d3",
     title: "Wine & Dine at Skina",
     venue: "Skina Restaurant",
-    venueId: "skina-restaurant",
+    venueId: "skina",
     image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600",
     date: "Jun 20, 2026",
     discount: 20,
@@ -186,7 +187,7 @@ const EVENT_DISCOUNTS: EventDiscount[] = [
     id: "d4",
     title: "Spa Day at Six Senses",
     venue: "Six Senses Spa",
-    venueId: "six-senses-spa",
+    venueId: "six-senses-spa-puente-romano",
     image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600",
     date: "Any day in June",
     discount: 35,
@@ -195,20 +196,6 @@ const EVENT_DISCOUNTS: EventDiscount[] = [
     code: "SPAVIP35",
     validUntil: "Jun 30, 2026",
     category: "Wellness",
-  },
-  {
-    id: "d5",
-    title: "Yacht Sunset Cruise",
-    venue: "Puerto Banús Marina",
-    venueId: "puerto-banus-shopping",
-    image: "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?w=600",
-    date: "Every Saturday",
-    discount: 15,
-    originalPrice: 500,
-    description: "Private yacht cruise along the Golden Mile with champagne, canapés & DJ. 15% off for app members.",
-    code: "YACHTVIP15",
-    validUntil: "Jul 31, 2026",
-    category: "Experience",
   },
 ];
 
@@ -703,6 +690,24 @@ export default function VipAccessScreen() {
   const colors = useColors();
   const [activeCategory, setActiveCategory] = useState<VipCategory>("tables");
 
+  // Aligne les visuels VIP sur les fiches : on tire cover_image_url des venues
+  // (par venueId/slug). Fallback sur l'image inline tant que le fetch n'a pas
+  // répondu ou si la venue n'a pas de cover.
+  const [covers, setCovers] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    getVenueCovers().then((m) => { if (!cancelled) setCovers(m); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const withCover = useCallback(
+    <T extends { venueId: string; image: string }>(o: T): T =>
+      ({ ...o, image: covers[o.venueId] ?? o.image }),
+    [covers],
+  );
+  const tables = useMemo(() => VIP_TABLES.map(withCover), [withCover]);
+  const discounts = useMemo(() => EVENT_DISCOUNTS.map(withCover), [withCover]);
+  const members = useMemo(() => MEMBER_OFFERS.map(withCover), [withCover]);
+
   const handleBookTable = useCallback((item: VipTableOffer) => {
     router.push({
       pathname: "/booking",
@@ -775,7 +780,7 @@ export default function VipAccessScreen() {
         {/* Content */}
         {activeCategory === "tables" && (
           <FlatList
-            data={VIP_TABLES}
+            data={tables}
             renderItem={renderTableItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
@@ -791,7 +796,7 @@ export default function VipAccessScreen() {
 
         {activeCategory === "discounts" && (
           <FlatList
-            data={EVENT_DISCOUNTS}
+            data={discounts}
             renderItem={renderDiscountItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
@@ -807,7 +812,7 @@ export default function VipAccessScreen() {
 
         {activeCategory === "members" && (
           <FlatList
-            data={MEMBER_OFFERS}
+            data={members}
             renderItem={renderMemberItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}

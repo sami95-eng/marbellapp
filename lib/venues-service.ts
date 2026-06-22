@@ -131,6 +131,23 @@ export interface VenueBasic {
   default_capacity: number;
 }
 
+/**
+ * Map slug → cover_image_url pour toutes les venues.
+ * Permet d'aligner automatiquement des visuels externes (offres VIP, etc.)
+ * sur la photo de couverture des fiches établissements.
+ */
+export async function getVenueCovers(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from("venues")
+    .select("slug, cover_image_url");
+  if (error) throw new Error(error.message);
+  const map: Record<string, string> = {};
+  for (const v of (data ?? []) as { slug: string | null; cover_image_url: string | null }[]) {
+    if (v.slug && v.cover_image_url) map[v.slug] = v.cover_image_url;
+  }
+  return map;
+}
+
 /** Liste simplifiée de toutes les venues + config créneaux (sélecteur admin) */
 export async function getAllVenuesBasic(): Promise<VenueBasic[]> {
   const { data, error } = await supabase
