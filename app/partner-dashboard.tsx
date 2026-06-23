@@ -197,6 +197,9 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
   const [rows, setRows]       = useState<PartnerRow[]>([]);
   const [loading, setLoading] = useState(!isDemo);
   const [error, setError]     = useState<string | null>(null);
+  // Filtre : "À venir" (date ≥ aujourd'hui, non annulées) vs "Historique"
+  // (date passée OU annulées).
+  const [tab, setTab]         = useState<"upcoming" | "history">("upcoming");
   // Verrou PAR ligne : chaque réservation a son propre état "en cours" — agir
   // sur une réservation ne bloque jamais les boutons des autres.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -379,6 +382,15 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
     }
   };
 
+  // Partition des réservations selon le filtre actif.
+  // Comparaison lexicographique des dates "YYYY-MM-DD" (fiable, sans Intl).
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const isHistory = (r: PartnerRow) => r.status === "cancelled" || (r.date ?? "") < todayStr;
+  const upcomingRows = rows.filter((r) => !isHistory(r));
+  const historyRows  = rows.filter(isHistory);
+  const filteredRows = tab === "upcoming" ? upcomingRows : historyRows;
+
   if (loading) {
     return (
       <View style={{ paddingVertical: 40, alignItems: "center" }}>
@@ -412,19 +424,48 @@ function ReservationsTab({ colors, isDemo }: { colors: ReturnType<typeof useColo
 
   return (
     <FlatList
-      data={rows}
+      data={filteredRows}
       keyExtractor={(item) => item.id}
-      extraData={`${editingId ?? ""}|${editDate}|${editTime}|${[...busyIds].join(",")}`}
+      extraData={`${tab}|${editingId ?? ""}|${editDate}|${editTime}|${[...busyIds].join(",")}`}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: 40 }}
       ListHeaderComponent={
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <Text style={{ fontSize: 13, color: colors.muted }}>
-            {rows.length} · {t("partner.tabReservations")}
-          </Text>
-          <TouchableOpacity onPress={load} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t("common.retry")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
-            <Ionicons name="reload" size={14} color={colors.muted} />
-          </TouchableOpacity>
+        <View style={{ marginBottom: 12, gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: 13, color: colors.muted }}>
+              {filteredRows.length} · {t("partner.tabReservations")}
+            </Text>
+            <TouchableOpacity onPress={load} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t("common.retry")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+              <Ionicons name="reload" size={14} color={colors.muted} />
+            </TouchableOpacity>
+          </View>
+          {/* Toggle À venir / Historique */}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {([
+              { key: "upcoming" as const, label: t("partner.filterUpcoming"), fallback: "À venir",    count: upcomingRows.length },
+              { key: "history"  as const, label: t("partner.filterHistory"),  fallback: "Historique", count: historyRows.length },
+            ]).map((f) => {
+              const sel = tab === f.key;
+              const label = f.label && !f.label.startsWith("partner.") ? f.label : f.fallback;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  onPress={() => setTab(f.key)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  style={{
+                    flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center",
+                    backgroundColor: sel ? colors.primary : colors.surface,
+                    borderWidth: 1, borderColor: sel ? colors.primary : colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: sel ? colors.onPrimary : colors.foreground }}>
+                    {label} ({f.count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       }
       ListEmptyComponent={
