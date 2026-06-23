@@ -234,6 +234,7 @@ export default function BookingScreen() {
   const [guests, setGuests] = useState("2");
   const [notes, setNotes] = useState("");
   const [phone, setPhone] = useState("");
+  const [payAtVenue, setPayAtVenue] = useState(false); // "Payer à l'établissement" (cash)
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Créneaux de disponibilité définis par l'établissement
@@ -299,6 +300,9 @@ export default function BookingScreen() {
       ? (vipDiscountPct > 0 ? Math.round(baseCents * (1 - vipDiscountPct / 100)) : baseCents)
       : null;
   const payable = amountCents != null;
+  // Paiement Stripe uniquement si un montant est dû ET que le client n'a pas
+  // choisi de régler sur place. "Payer à l'établissement" → réservation cash.
+  const useStripeCheckout = payable && !payAtVenue;
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -382,6 +386,7 @@ export default function BookingScreen() {
         user_email:          authUser?.email ?? user?.email ?? null,
         user_name:           user?.name || (authUser?.email ?? user?.email ?? "").split("@")[0] || null,
         status:              "pending",
+        payment_method:      payAtVenue ? "cash" : "card",
         confirmation_number: confirmNum,
         slot_id:             selectedSlot?.id ?? null,
       });
@@ -408,7 +413,7 @@ export default function BookingScreen() {
         }).catch((e) => console.warn("[booking] notification email failed:", e?.message));
       }
 
-      if (payable && amountCents) {
+      if (useStripeCheckout && amountCents) {
         // ── Paiement Stripe Checkout ─────────────────────────────────
         // Crée la session côté serveur puis redirige vers la page Stripe.
         // (Au retour, success_url renvoie vers /booking-confirmation ; le
@@ -447,7 +452,8 @@ export default function BookingScreen() {
         }
         // Redirection en cours — réservation "pending" jusqu'au paiement.
       } else {
-        // Aucun prix en base → réservation "pending" sans paiement Stripe.
+        // Pas de paiement Stripe : soit aucun prix en base, soit le client a
+        // choisi de régler à l'établissement → réservation "pending" + cash.
         router.push({
           pathname: "/booking-confirmation",
           params: {
@@ -460,6 +466,7 @@ export default function BookingScreen() {
             tableName:  selectedTable?.name ?? "",
             tablePrice: selectedTable ? String(selectedTable.price_min) : "",
             confirmationNumber: confirmNum,
+            paymentMethod: payAtVenue ? "cash" : "card",
           },
         });
       }
@@ -566,6 +573,54 @@ export default function BookingScreen() {
             </View>
           )}
         </View>
+
+        {/* ── Payer à l'établissement (cash) ──────────────────────── */}
+        <TouchableOpacity
+          onPress={() => setPayAtVenue((v) => !v)}
+          activeOpacity={0.8}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: payAtVenue }}
+          style={[cardStyle, {
+            flexDirection: "row", alignItems: "center", gap: 12,
+            borderColor: payAtVenue ? colors.primary : colors.border,
+            borderWidth: payAtVenue ? 1.5 : 1,
+          }]}
+        >
+          <Ionicons
+            name={payAtVenue ? "cash" : "cash-outline"}
+            size={22}
+            color={payAtVenue ? colors.primary : colors.muted}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
+              Payer à l'établissement
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+              Réservez sans payer en ligne, réglez sur place le jour J.
+            </Text>
+          </View>
+          <View style={{
+            width: 22, height: 22, borderRadius: 11,
+            borderWidth: 2, borderColor: payAtVenue ? colors.primary : colors.border,
+            alignItems: "center", justifyContent: "center",
+            backgroundColor: payAtVenue ? colors.primary : "transparent",
+          }}>
+            {payAtVenue && <Ionicons name="checkmark" size={14} color={colors.onPrimary} />}
+          </View>
+        </TouchableOpacity>
+
+        {/* Message rassurant quand le paiement sur place est choisi */}
+        {payAtVenue && (
+          <View style={{
+            backgroundColor: "rgba(74,222,128,0.12)",
+            borderRadius: 12, padding: 12, marginBottom: 12,
+            borderWidth: 1, borderColor: colors.success,
+          }}>
+            <Text style={{ fontSize: 13, color: colors.success, fontWeight: "600", lineHeight: 19 }}>
+              ✅ Votre place est réservée. Réglez directement à l'établissement le jour J.
+            </Text>
+          </View>
+        )}
 
         {/* ── Date ────────────────────────────────────────────────── */}
         <View style={cardStyle}>
@@ -734,22 +789,24 @@ export default function BookingScreen() {
           <View style={{ flex: 1 }}>
             <Text style={labelStyle}>{t("booking.total") || "TOTAL À PAYER"}</Text>
             <Text style={{ fontSize: 11, color: colors.muted }}>
-              {payable && selectedTable ? `Table · ${selectedTable.name}` : "Paiement non requis"}
+              {payAtVenue
+                ? "Paiement à l'établissement"
+                : (payable && selectedTable ? `Table · ${selectedTable.name}` : "Paiement non requis")}
             </Text>
-            {baseCents != null && vipDiscountPct > 0 ? (
+            {!payAtVenue && baseCents != null && vipDiscountPct > 0 ? (
               <Text style={{ fontSize: 11, color: colors.success, fontWeight: "700", marginTop: 4 }}>
                 Réduction VIP {vipTierLabel} −{vipDiscountPct}%
               </Text>
             ) : null}
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            {baseCents != null && vipDiscountPct > 0 ? (
+            {!payAtVenue && baseCents != null && vipDiscountPct > 0 ? (
               <Text style={{ fontSize: 12, color: colors.muted, textDecorationLine: "line-through" }}>
                 {formatEur(baseCents)}
               </Text>
             ) : null}
             <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary }}>
-              {amountCents != null ? formatEur(amountCents) : "Prix sur demande"}
+              {payAtVenue ? "Sur place" : (amountCents != null ? formatEur(amountCents) : "Prix sur demande")}
             </Text>
           </View>
         </View>
@@ -774,7 +831,7 @@ export default function BookingScreen() {
             <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 16 }}>
-              {amountCents != null
+              {useStripeCheckout && amountCents != null
                 ? `${t("booking.confirmAndPay") || "Confirmer et payer"} · ${formatEur(amountCents)}`
                 : (t("booking.confirmBtn") || "Confirmer la réservation")}
             </Text>

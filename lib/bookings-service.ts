@@ -18,6 +18,7 @@ export interface Booking {
   user_email: string | null;
   user_name: string | null;
   status: "confirmed" | "pending" | "cancelled" | "completed";
+  payment_method: "card" | "cash";
   confirmation_number: string | null;
   slot_id: string | null;
   created_at: string;

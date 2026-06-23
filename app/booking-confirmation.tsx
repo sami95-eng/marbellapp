@@ -8,7 +8,7 @@ import { getBookingById, type Booking } from "@/lib/bookings-service";
 
 export default function BookingConfirmationScreen() {
   const { t } = useTranslation();
-  const { session_id, venueId, venueName: venueNameParam, date, time, guests, tableName, tablePrice, confirmationNumber } = useLocalSearchParams<{
+  const { session_id, venueId, venueName: venueNameParam, date, time, guests, tableName, tablePrice, confirmationNumber, paymentMethod } = useLocalSearchParams<{
     session_id?: string;
     venueId: string;
     venueName?: string;
@@ -18,6 +18,7 @@ export default function BookingConfirmationScreen() {
     tableName?: string;
     tablePrice?: string;
     confirmationNumber?: string;
+    paymentMethod?: string;
   }>();
   const router = useRouter();
 
@@ -120,6 +121,10 @@ export default function BookingConfirmationScreen() {
     ? (booking?.confirmation_number ?? confirmationNumber ?? "—")
     : (confirmationNumber || `MSS-${Date.now().toString(36).toUpperCase().slice(-6)}`);
 
+  // Paiement à l'établissement (cash) : jamais de passage Stripe, l'info vient
+  // donc du paramètre de navigation (ou de la réservation si rechargée).
+  const isCash = paymentMethod === "cash" || booking?.payment_method === "cash";
+
   const formatMoney = (cents: number) =>
     (cents / 100).toLocaleString(undefined, { style: "currency", currency: (currency || "eur").toUpperCase() });
 
@@ -166,11 +171,16 @@ export default function BookingConfirmationScreen() {
             // Flux sans paiement (réservation en attente de validation partenaire)
             <>
               <View className="w-20 h-20 rounded-full bg-primary items-center justify-center mb-4">
-                <Text className="text-5xl">⏳</Text>
+                <Text className="text-5xl">{isCash ? "💶" : "⏳"}</Text>
               </View>
               <Text className="text-3xl font-bold text-foreground" style={{ textAlign: "center" }}>
                 {t("bookingConfirm.title")}
               </Text>
+              {isCash && (
+                <Text className="text-sm text-muted mt-2" style={{ textAlign: "center" }}>
+                  Votre réservation est confirmée. Présentez votre numéro de confirmation à l'arrivée.
+                </Text>
+              )}
             </>
           )}
         </View>
@@ -263,6 +273,17 @@ export default function BookingConfirmationScreen() {
                 <View className="mt-4 pt-4 border-t border-border flex-row items-center justify-between">
                   <Text className="text-xs text-muted font-semibold">{t("bookingConfirm.amountPaid")}</Text>
                   <Text className="text-base font-bold text-primary">{formatMoney(amountPaid)}</Text>
+                </View>
+              )}
+
+              {/* Paiement à l'établissement (cash) — pas de montant Stripe */}
+              {isCash && (
+                <View className="mt-4 pt-4 border-t border-border flex-row items-center justify-between">
+                  <Text className="text-xs text-muted font-semibold">PAIEMENT</Text>
+                  <View className="flex-row items-center gap-2">
+                    <Text style={{ fontSize: 14 }}>💶</Text>
+                    <Text className="text-base font-bold text-primary">Paiement à l'établissement</Text>
+                  </View>
                 </View>
               )}
             </View>
