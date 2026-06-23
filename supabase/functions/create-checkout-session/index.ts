@@ -8,9 +8,10 @@
 // Renvoie  : { url } — URL de la page Checkout vers laquelle rediriger.
 //
 // ⚠️ Commission (application_fee_amount = 15%) : nécessite Stripe Connect.
-//    Elle n'est appliquée que si la venue a un compte connecté
-//    (venues.stripe_account_id). Sinon : paiement simple, sans commission
-//    (la plateforme encaisse tout) + warning. Voir onboarding Connect à venir.
+//    Elle n'est appliquée que si la venue a un compte connecté ET vérifié
+//    (venues.stripe_account_id + stripe_charges_enabled). Sinon : paiement
+//    simple, sans commission (la plateforme encaisse tout) + warning.
+//    L'onboarding se fait via create-connect-account / check-connect-status.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@16.12.0?target=deno";
@@ -51,25 +52,30 @@ serve(async (req: Request) => {
     // Nom de la venue + compte Stripe connecté (pour la commission).
     let venueName = "Réservation";
     let connectedAccount: string | null = null;
+    let chargesEnabled = false;
     if (admin) {
       const { data } = await admin
-        .from("venues").select("name, stripe_account_id").eq("id", venueId).maybeSingle();
+        .from("venues").select("name, stripe_account_id, stripe_charges_enabled").eq("id", venueId).maybeSingle();
       if (data?.name) venueName = data.name as string;
-      connectedAccount = (data as { stripe_account_id?: string } | null)?.stripe_account_id ?? null;
+      const v = data as { stripe_account_id?: string; stripe_charges_enabled?: boolean } | null;
+      connectedAccount = v?.stripe_account_id ?? null;
+      chargesEnabled = !!v?.stripe_charges_enabled;
     }
 
     const fee = Math.round(amt * COMMISSION_RATE);
 
-    // Données du PaymentIntent : metadata toujours ; commission seulement si
-    // un compte connecté existe (sinon Stripe rejette application_fee_amount).
+    // Données du PaymentIntent : metadata toujours ; commission + reversement
+    // seulement si la venue a un compte connecté VÉRIFIÉ (charges_enabled).
+    // Sinon Stripe rejette application_fee_amount/transfer_data → paiement
+    // simple, la plateforme encaisse tout (comportement par défaut).
     const paymentIntentData: Record<string, unknown> = {
       metadata: { bookingId, venueId },
     };
-    if (connectedAccount) {
+    if (connectedAccount && chargesEnabled) {
       paymentIntentData.application_fee_amount = fee;
       paymentIntentData.transfer_data = { destination: connectedAccount };
     } else {
-      console.warn(`[checkout] venue ${venueId} sans compte Stripe connecté → commission non prélevée`);
+      console.warn(`[checkout] venue ${venueId} sans compte Stripe connecté vérifié → commission non prélevée`);
     }
 
     const session = await stripe.checkout.sessions.create({

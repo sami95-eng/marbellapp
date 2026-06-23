@@ -29,6 +29,40 @@ export const PLAN_LABELS: Record<SubscriptionPlan, string> = {
   premium: "Premium",
 };
 
+/** État du compte Stripe Connect d'un partenaire. */
+export interface ConnectStatus {
+  connected: boolean;
+  charges_enabled: boolean;
+  details_submitted: boolean;
+}
+
+/**
+ * Interroge l'Edge Function check-connect-status pour connaître l'état du
+ * compte Stripe Connect du partenaire connecté (le JWT est joint par invoke).
+ */
+export async function getConnectStatus(): Promise<ConnectStatus> {
+  const { data, error } = await supabase.functions.invoke("check-connect-status");
+  if (error) throw new Error(error.message);
+  const d = data as Partial<ConnectStatus> | null;
+  return {
+    connected:         !!d?.connected,
+    charges_enabled:   !!d?.charges_enabled,
+    details_submitted: !!d?.details_submitted,
+  };
+}
+
+/**
+ * Crée (ou réutilise) le compte Stripe Connect Express du partenaire et
+ * renvoie l'URL d'onboarding Stripe vers laquelle rediriger.
+ */
+export async function startConnectOnboarding(): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("create-connect-account");
+  if (error) throw new Error(error.message);
+  const url = (data as { url?: string } | null)?.url;
+  if (!url) throw new Error("Lien d'onboarding Stripe indisponible");
+  return url;
+}
+
 /**
  * Abonnement actif du partenaire connecté. La RLS (partner_id = auth.uid())
  * garantit qu'on ne lit que le sien. Renvoie null si aucun abonnement actif.

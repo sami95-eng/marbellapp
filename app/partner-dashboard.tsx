@@ -40,7 +40,8 @@ import {
 } from "@/lib/clients-service";
 import {
   getMySubscription, getMyCashFeesThisMonth, PLAN_LABELS,
-  type PartnerSubscription, type PartnerCashFees,
+  getConnectStatus, startConnectOnboarding,
+  type PartnerSubscription, type PartnerCashFees, type ConnectStatus,
 } from "@/lib/subscriptions-service";
 
 type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts" | "subscription";
@@ -2161,6 +2162,47 @@ function SubscriptionTab({ colors, isDemo, userId }: { colors: ReturnType<typeof
   const [loading, setLoading] = useState(!isDemo);
   const [error, setError]     = useState<string | null>(null);
 
+  // ── Stripe Connect ───────────────────────────────────────────────
+  const [connect, setConnect] = useState<ConnectStatus | null>(null);
+  const [connectLoading, setConnectLoading] = useState(!isDemo);
+  const [connecting, setConnecting] = useState(false);
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  const loadConnect = useCallback(async () => {
+    if (isDemo) {
+      setConnect({ connected: true, charges_enabled: true, details_submitted: true });
+      setConnectLoading(false);
+      return;
+    }
+    setConnectLoading(true);
+    try {
+      setConnect(await getConnectStatus());
+    } catch {
+      // Échec d'appel (fonction non déployée, hors ligne…) → considère non connecté.
+      setConnect({ connected: false, charges_enabled: false, details_submitted: false });
+    } finally {
+      setConnectLoading(false);
+    }
+  }, [isDemo]);
+
+  useEffect(() => { loadConnect(); }, [loadConnect]);
+
+  const handleConnect = async () => {
+    if (isDemo) { notify("Mode démo — connexion Stripe indisponible."); return; }
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      const url = await startConnectOnboarding();
+      if (Platform.OS === "web") window.location.href = url;
+      else await Linking.openURL(url);
+    } catch (e: any) {
+      notify(e.message ?? "Échec de la connexion Stripe");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   const load = useCallback(async () => {
     if (isDemo) {
       setSub({
@@ -2281,6 +2323,66 @@ function SubscriptionTab({ colors, isDemo, userId }: { colors: ReturnType<typeof
           {nbCash} réservation(s) réglée(s) en espèces × {cashFee} € = {amountDue} € à régler à Marbell'app en fin de mois.
         </Text>
       )}
+
+      {/* ── Paiements Stripe (Connect) ──────────────────────────── */}
+      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10 }}>
+        PAIEMENTS STRIPE
+      </Text>
+      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: colors.border, marginBottom: 20 }}>
+        {connectLoading ? (
+          <View style={{ paddingVertical: 8, alignItems: "center" }}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : connect?.charges_enabled ? (
+          // Compte connecté ET vérifié
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.foreground, lineHeight: 19 }}>
+              ✅ Compte Stripe actif — vous recevez vos paiements automatiquement.
+            </Text>
+          </View>
+        ) : connect?.connected ? (
+          // Compte connecté mais vérification incomplète
+          <View style={{ gap: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Ionicons name="time-outline" size={28} color={colors.warning} />
+              <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.foreground, lineHeight: 19 }}>
+                En cours de vérification ⏳
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleConnect}
+              disabled={connecting}
+              activeOpacity={0.85}
+              style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 50, paddingVertical: 12, alignItems: "center", opacity: connecting ? 0.6 : 1 }}
+            >
+              {connecting
+                ? <ActivityIndicator color={colors.primary} />
+                : <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>Continuer la vérification</Text>}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // Aucun compte connecté
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 18 }}>
+              Connectez votre compte Stripe pour encaisser directement les paiements de vos réservations.
+            </Text>
+            <TouchableOpacity
+              onPress={handleConnect}
+              disabled={connecting}
+              activeOpacity={0.85}
+              style={{ backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 13, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8, opacity: connecting ? 0.6 : 1 }}
+            >
+              {connecting
+                ? <ActivityIndicator color={colors.onPrimary} />
+                : <>
+                    <Ionicons name="card-outline" size={18} color={colors.onPrimary} />
+                    <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 15 }}>Connecter mon compte Stripe</Text>
+                  </>}
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
 
       {/* Contacter pour s'abonner / changer de formule */}
       <TouchableOpacity
