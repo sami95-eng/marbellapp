@@ -15,7 +15,7 @@ import type { VenueTable } from "@/lib/tables-service";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
-import { getManagedBookings, updateBookingStatus, updateBookingSchedule } from "@/lib/bookings-service";
+import { getManagedBookings, updateBookingStatus, updateBookingSchedule, getPartnerStats, type PartnerStats } from "@/lib/bookings-service";
 import { getAllVenuesBasic, getManagedVenues, updateVenueSlotConfig, type VenueBasic } from "@/lib/venues-service";
 import {
   getVenueTablesByUUID, createVenueTable, toggleTableActive, deleteVenueTable,
@@ -61,8 +61,33 @@ const iconFor = (e?: string): IoniconName => EMOJI_TO_ICON[e ?? ""] ?? "ellipse-
 // ─────────────────────────────────────────────────────────────────────────────
 // Overview Tab
 // ─────────────────────────────────────────────────────────────────────────────
-function OverviewTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
+// Formate un montant € en compact (€4.2K) au-delà de 1000.
+const fmtMoney = (n: number) => (n >= 1000 ? `€${(n / 1000).toFixed(1)}K` : `€${Math.round(n)}`);
+
+function OverviewTab({ colors, isDemo, isAdmin, userId, instagramPosts }: {
+  colors: ReturnType<typeof useColors>; isDemo: boolean; isAdmin: boolean; userId?: string; instagramPosts: number;
+}) {
   const { t } = useTranslation();
+  const [stats, setStats] = useState<PartnerStats | null>(null);
+  const [loading, setLoading] = useState(!isDemo);
+
+  const load = useCallback(async () => {
+    if (isDemo) return;
+    setLoading(true);
+    try { setStats(await getPartnerStats({ userId, isAdmin })); }
+    catch (e: any) { console.warn("[partner] stats load failed:", e?.message); setStats(null); }
+    finally { setLoading(false); }
+  }, [isDemo, isAdmin, userId]);
+
+  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const statusIcon: Record<string, string> = { confirmed: "💰", pending: "📋", cancelled: "👑", completed: "⭐" };
+  const statusLabel = (s: string) => ({
+    confirmed: t("partner.confirmed"), pending: t("partner.pending"), cancelled: t("partner.cancelled"),
+  }[s] ?? s);
+
+  // Métriques : démo → constantes ; réel → données Supabase agrégées.
   const metrics = isDemo
     ? [
         { label: t("partner.bookingsThisMonth"), value: DEMO_METRICS.bookingsThisMonth.value, icon: DEMO_METRICS.bookingsThisMonth.icon, trend: DEMO_METRICS.bookingsThisMonth.trend },
@@ -70,19 +95,27 @@ function OverviewTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>;
         { label: t("partner.instagramPosts"),    value: DEMO_METRICS.instagramPosts.value,    icon: DEMO_METRICS.instagramPosts.icon,    trend: DEMO_METRICS.instagramPosts.trend },
         { label: t("partner.avgRating"),         value: DEMO_METRICS.avgRating.value,         icon: DEMO_METRICS.avgRating.icon,         trend: DEMO_METRICS.avgRating.trend },
       ]
-    : [
-        { label: t("partner.bookingsThisMonth"), value: "12", icon: "📋", trend: "+3%" },
-        { label: t("partner.vipRevenue"),        value: "€4.2K", icon: "💰", trend: "+8%" },
-        { label: t("partner.instagramPosts"),    value: "5",  icon: "📸", trend: "+2" },
-        { label: t("partner.avgRating"),         value: "4.5", icon: "⭐", trend: t("partner.trend.stable") },
-      ];
+    : (() => {
+        const delta = (stats?.bookingsThisMonth ?? 0) - (stats?.bookingsLastMonth ?? 0);
+        const bookingsTrend = delta === 0 ? t("partner.trend.stable") : `${delta > 0 ? "+" : ""}${delta}`;
+        return [
+          { label: t("partner.bookingsThisMonth"), value: String(stats?.bookingsThisMonth ?? 0), icon: "📋", trend: bookingsTrend },
+          { label: t("partner.vipRevenue"),        value: fmtMoney(stats?.confirmedRevenue ?? 0), icon: "💰", trend: "" },
+          { label: t("partner.instagramPosts"),    value: String(instagramPosts), icon: "📸", trend: "" },
+          { label: t("partner.avgRating"),         value: stats?.avgRating != null ? stats.avgRating.toFixed(1) : "—", icon: "⭐", trend: "" },
+        ];
+      })();
 
-  const activities = isDemo ? DEMO_ACTIVITY : [
-    { msg: t("partner.activity1"), time: t("partner.ago2h"),    icon: "📋" },
-    { msg: t("partner.activity2"), time: t("partner.ago4h"),    icon: "📸" },
-    { msg: t("partner.activity3"), time: t("partner.yesterday"), icon: "💰" },
-    { msg: t("partner.activity4"), time: t("partner.yesterday"), icon: "👑" },
-  ];
+  // Activité récente : démo → constantes ; réel → dernières réservations.
+  const activities = isDemo
+    ? DEMO_ACTIVITY
+    : (stats?.recent ?? []).map((r) => ({
+        msg: `${r.venueName} · ${statusLabel(r.status)}`, time: r.date, icon: statusIcon[r.status] ?? "📋",
+      }));
+
+  if (loading) {
+    return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
+  }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -97,7 +130,7 @@ function OverviewTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>;
             <Ionicons name={iconFor(m.icon)} size={22} color={colors.muted} />
             <Text style={{ fontSize: 22, fontWeight: "800", color: colors.foreground, marginTop: 8 }}>{m.value}</Text>
             <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{m.label}</Text>
-            <Text style={{ fontSize: 11, color: colors.success, marginTop: 4, fontWeight: "600" }}>{m.trend}</Text>
+            {m.trend ? <Text style={{ fontSize: 11, color: colors.success, marginTop: 4, fontWeight: "600" }}>{m.trend}</Text> : null}
           </View>
         ))}
       </View>
@@ -105,7 +138,9 @@ function OverviewTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>;
       <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
         {t("partner.recentActivity")}
       </Text>
-      {activities.map((a, i) => (
+      {activities.length === 0 ? (
+        <Text style={{ fontSize: 13, color: colors.muted }}>{t("partner.noReservations") || "Aucune activité récente"}</Text>
+      ) : activities.map((a, i) => (
         <View key={i} style={{
           flexDirection: "row", alignItems: "center", backgroundColor: colors.surface,
           borderRadius: 12, padding: 12, marginBottom: 8,
@@ -1308,11 +1343,36 @@ function PhotosTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useCo
 // ─────────────────────────────────────────────────────────────────────────────
 // Stats Tab
 // ─────────────────────────────────────────────────────────────────────────────
-function StatsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
+function StatsTab({ colors, isDemo, isAdmin, userId }: {
+  colors: ReturnType<typeof useColors>; isDemo: boolean; isAdmin: boolean; userId?: string;
+}) {
   const { t } = useTranslation();
-  const monthly = isDemo ? DEMO_MONTHLY : { months: ["Jan","Feb","Mar","Apr","May","Jun"], values: [3,5,4,8,10,12] };
-  const maxVal = Math.max(...monthly.values);
-  const topOffers = isDemo ? DEMO_TOP_OFFERS : DEMO_TOP_OFFERS.slice(0, 2);
+  const [stats, setStats] = useState<PartnerStats | null>(null);
+  const [loading, setLoading] = useState(!isDemo);
+
+  const load = useCallback(async () => {
+    if (isDemo) return;
+    setLoading(true);
+    try { setStats(await getPartnerStats({ userId, isAdmin })); }
+    catch (e: any) { console.warn("[partner] stats load failed:", e?.message); setStats(null); }
+    finally { setLoading(false); }
+  }, [isDemo, isAdmin, userId]);
+
+  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const monthly = isDemo
+    ? DEMO_MONTHLY
+    : (stats?.monthly.values.length ? stats.monthly : { months: [], values: [] });
+  const maxVal = Math.max(1, ...monthly.values);
+  // Top venues : démo → constantes ; réel → agrégat (revenu formaté en €).
+  const topOffers = isDemo
+    ? DEMO_TOP_OFFERS
+    : (stats?.topVenues ?? []).map((v) => ({ name: v.name, bookings: v.bookings, revenue: fmtMoney(v.revenue) }));
+
+  if (loading) {
+    return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
+  }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -2522,13 +2582,13 @@ export default function PartnerDashboardScreen() {
 
         {/* Content */}
         <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12 }}>
-          {activeTab === "overview"     && <OverviewTab     colors={colors} isDemo={isDemoMode} />}
+          {activeTab === "overview"     && <OverviewTab     colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} instagramPosts={isDemoMode ? 0 : (profile?.partner_post_count ?? 0)} />}
           {activeTab === "reservations" && <ReservationsTab colors={colors} isDemo={isDemoMode} />}
           {activeTab === "availability" && <AvailabilityTab colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "tables"       && <TablesTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "photos"       && <PhotosTab       colors={colors} isDemo={isDemoMode} userId={user?.id} />}
-          {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} />}
+          {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "subscription" && (isPartner || isAdmin) && <SubscriptionTab colors={colors} isDemo={isDemoMode} userId={user?.id} />}
           {activeTab === "vip-posts"    && isAdmin && <VipPostsTab colors={colors} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
