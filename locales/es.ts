@@ -351,6 +351,12 @@ const es = {
   "joinPartner.venueTypeLbl": "Tipo de establecimiento *",
   "joinPartner.instagramHandleLbl": "Cuenta de Instagram *",
   "joinPartner.instagramPlaceholder": "@tu_establecimiento",
+  "joinPartner.websiteLbl": "Sitio web (opcional)",
+  "joinPartner.websitePlaceholder": "https://tu-establecimiento.com",
+  "joinPartner.addressLbl": "Dirección / ciudad *",
+  "joinPartner.addressPlaceholder": "Ej: Av. Bulevar, Marbella",
+  "joinPartner.capacityLbl": "Capacidad aprox. (cubiertos/plazas, opcional)",
+  "joinPartner.capacityPlaceholder": "Ej: 120",
   "joinPartner.continue": "Continuar →",
   "joinPartner.step2Title": "Tus ofertas y contacto",
   "joinPartner.step2Desc": "¿Qué ofertas quieres proponer?",
@@ -366,6 +372,9 @@ const es = {
   "joinPartner.status2": "Un account manager se pondrá en contacto",
   "joinPartner.status3": "En línea en 5 días hábiles",
   "joinPartner.backHome": "Volver al inicio",
+  "joinPartner.responseTime": "Te respondemos en menos de 48h",
+  "joinPartner.fileNumberLbl": "Tu número de expediente",
+  "joinPartner.errorTitle": "Error",
   "joinPartner.error": "Se produjo un error. Inténtalo de nuevo.",
 
   // ── Venue Types ───────────────────────────────────────────────────

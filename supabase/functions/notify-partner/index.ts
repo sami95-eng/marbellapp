@@ -57,6 +57,9 @@ function adminEmailHTML(data: Record<string, string>) {
         "Venue Name": data.venueName,
         "Venue Type": data.venueType,
         "Instagram":  data.instagram,
+        "Website":    data.website || "Not provided",
+        "Address":    data.address,
+        "Capacity":   data.capacity || "Not provided",
       }).map(([k, v]) => `
       <tr>
         <td style="color:#888;font-size:12px;padding:8px 0;width:40%">${k}</td>
@@ -163,7 +166,7 @@ serve(async (req: Request) => {
 
   try {
     const data = await req.json();
-    const { venueName, venueType, instagram, contactName, contactEmail, contactPhone, offerTypes } = data;
+    const { venueName, venueType, instagram, website, address, capacity, contactName, contactEmail, contactPhone, offerTypes } = data;
 
     if (!contactEmail || !venueName) {
       return new Response(
@@ -172,7 +175,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const emailData = { venueName, venueType, instagram, contactName, contactEmail, contactPhone, offerTypes };
+    const emailData = { venueName, venueType, instagram, website, address, capacity, contactName, contactEmail, contactPhone, offerTypes };
 
     // 1. Notification to admin
     await sendEmail(ADMIN_EMAIL, `🏢 New Partner Request: ${venueName}`, adminEmailHTML(emailData));

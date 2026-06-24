@@ -123,6 +123,9 @@ CREATE TABLE IF NOT EXISTS public.partner_applications (
   venue_name   TEXT        NOT NULL,
   venue_type   TEXT,
   instagram    TEXT,
+  website      TEXT,
+  address      TEXT,
+  capacity     TEXT,
   contact_name TEXT,
   email        TEXT        NOT NULL,
   phone        TEXT,
@@ -131,6 +134,12 @@ CREATE TABLE IF NOT EXISTS public.partner_applications (
                  CHECK (status IN ('pending', 'contacted', 'approved', 'rejected')),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Colonnes ajoutées après coup (formulaire join-partner v2) : idempotent pour
+-- les bases où la table existe déjà.
+ALTER TABLE public.partner_applications ADD COLUMN IF NOT EXISTS website  TEXT;
+ALTER TABLE public.partner_applications ADD COLUMN IF NOT EXISTS address  TEXT;
+ALTER TABLE public.partner_applications ADD COLUMN IF NOT EXISTS capacity TEXT;
 
 ALTER TABLE public.partner_applications ENABLE ROW LEVEL SECURITY;
 

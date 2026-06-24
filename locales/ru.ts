@@ -351,6 +351,12 @@ const ru = {
   "joinPartner.venueTypeLbl": "Тип заведения *",
   "joinPartner.instagramHandleLbl": "Аккаунт Instagram *",
   "joinPartner.instagramPlaceholder": "@ваше_заведение",
+  "joinPartner.websiteLbl": "Веб-сайт (необязательно)",
+  "joinPartner.websitePlaceholder": "https://ваше-заведение.com",
+  "joinPartner.addressLbl": "Адрес / город *",
+  "joinPartner.addressPlaceholder": "Пример: Av. Bulevar, Marbella",
+  "joinPartner.capacityLbl": "Примерная вместимость (мест, необязательно)",
+  "joinPartner.capacityPlaceholder": "Пример: 120",
   "joinPartner.continue": "Продолжить →",
   "joinPartner.step2Title": "Ваши предложения и контакт",
   "joinPartner.step2Desc": "Какие предложения вы хотите разместить?",
@@ -366,6 +372,9 @@ const ru = {
   "joinPartner.status2": "Менеджер по работе с клиентами свяжется с вами",
   "joinPartner.status3": "Публикация в течение 5 рабочих дней",
   "joinPartner.backHome": "На главную",
+  "joinPartner.responseTime": "Мы ответим вам в течение 48 часов",
+  "joinPartner.fileNumberLbl": "Ваш номер заявки",
+  "joinPartner.errorTitle": "Ошибка",
   "joinPartner.error": "Произошла ошибка. Пожалуйста, попробуйте снова.",
 
   // ── Venue Types ───────────────────────────────────────────────────

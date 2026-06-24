@@ -36,6 +36,9 @@ export default function JoinPartnerScreen() {
   const [venueName, setVenueName] = useState("");
   const [venueType, setVenueType] = useState("");
   const [instagram, setInstagram] = useState("");
+  const [website, setWebsite] = useState("");
+  const [address, setAddress] = useState("");
+  const [capacity, setCapacity] = useState("");
 
   // Step 2
   const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
@@ -43,7 +46,10 @@ export default function JoinPartnerScreen() {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
 
-  const canStep1 = venueName.length > 1 && venueType !== "" && instagram.length > 1;
+  // Numéro de dossier (ID de la candidature créée en base), affiché à l'étape 3.
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+
+  const canStep1 = venueName.length > 1 && venueType !== "" && instagram.length > 1 && address.length > 1;
   const canStep2 = selectedOffers.length > 0 && contactName.length > 1 && contactEmail.includes("@");
 
   const toggleOffer = (id: string) => {
@@ -57,26 +63,44 @@ export default function JoinPartnerScreen() {
       setIsLoading(true);
 
       // 1) Persiste la candidature en base (source de vérité, retrouvable
-      //    dans le dashboard admin). Non bloquant pour l'UX.
-      const { error: appError } = await supabase.from("partner_applications").insert({
-        venue_name:   venueName,
-        venue_type:   venueType,
-        instagram,
-        contact_name: contactName,
-        email:        contactEmail,
-        phone:        contactPhone || null,
-        offers:       selectedOffers.join(", "),
-      });
-      if (appError) {
-        console.warn("[join-partner] application insert failed:", appError.message);
+      //    dans le dashboard admin). BLOQUANT : sans enregistrement il n'y a
+      //    pas de dossier — on stoppe et on affiche une vraie erreur.
+      const { data: application, error: appError } = await supabase
+        .from("partner_applications")
+        .insert({
+          venue_name:   venueName,
+          venue_type:   venueType,
+          instagram,
+          website:      website || null,
+          address,
+          capacity:     capacity || null,
+          contact_name: contactName,
+          email:        contactEmail,
+          phone:        contactPhone || null,
+          offers:       selectedOffers.join(", "),
+        })
+        .select("id")
+        .single();
+
+      if (appError || !application) {
+        console.error("[join-partner] application insert failed:", appError?.message);
+        Alert.alert(t("joinPartner.errorTitle"), t("joinPartner.error"));
+        return; // on ne passe pas à l'étape 3
       }
 
+      setApplicationId(application.id);
+
       // 2) Notifie l'admin + le candidat par email (Edge Function Resend).
+      //    NON BLOQUANT : la candidature est déjà enregistrée, un échec d'email
+      //    ne doit pas priver le candidat de sa confirmation.
       const { error: fnError } = await supabase.functions.invoke("notify-partner", {
         body: {
           venueName,
           venueType,
           instagram,
+          website: website || null,
+          address,
+          capacity: capacity || null,
           contactName,
           contactEmail,
           contactPhone: contactPhone || null,
@@ -84,7 +108,6 @@ export default function JoinPartnerScreen() {
         },
       });
 
-      // On avance même si l'email échoue (Edge Function pas encore déployée)
       if (fnError) {
         console.warn("Email notification failed (Edge Function may not be deployed):", fnError.message);
       }
@@ -92,7 +115,7 @@ export default function JoinPartnerScreen() {
       setStep(3);
     } catch (err: any) {
       console.error("handleSubmit error:", err);
-      Alert.alert("Erreur", t("joinPartner.error"));
+      Alert.alert(t("joinPartner.errorTitle"), t("joinPartner.error"));
     } finally {
       setIsLoading(false);
     }
@@ -212,6 +235,42 @@ export default function JoinPartnerScreen() {
               />
             </View>
 
+            <View style={{ gap: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.muted }}>{t("joinPartner.websiteLbl")}</Text>
+              <TextInput
+                value={website}
+                onChangeText={setWebsite}
+                placeholder={t("joinPartner.websitePlaceholder")}
+                placeholderTextColor="#444"
+                autoCapitalize="none"
+                keyboardType="url"
+                style={inputStyle(colors)}
+              />
+            </View>
+
+            <View style={{ gap: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.muted }}>{t("joinPartner.addressLbl")}</Text>
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder={t("joinPartner.addressPlaceholder")}
+                placeholderTextColor="#444"
+                style={inputStyle(colors)}
+              />
+            </View>
+
+            <View style={{ gap: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.muted }}>{t("joinPartner.capacityLbl")}</Text>
+              <TextInput
+                value={capacity}
+                onChangeText={setCapacity}
+                placeholder={t("joinPartner.capacityPlaceholder")}
+                placeholderTextColor="#444"
+                keyboardType="number-pad"
+                style={inputStyle(colors)}
+              />
+            </View>
+
             <TouchableOpacity
               onPress={() => setStep(2)}
               disabled={!canStep1}
@@ -327,6 +386,28 @@ export default function JoinPartnerScreen() {
               {t("joinPartner.successDesc")}{"\n"}
               <Text style={{ color: colors.primary, fontWeight: "600" }}>{contactEmail}</Text>
             </Text>
+
+            <Text style={{ fontSize: 14, color: colors.foreground, textAlign: "center", fontWeight: "600" }}>
+              ⏱️ {t("joinPartner.responseTime")}
+            </Text>
+
+            {applicationId && (
+              <View style={{
+                backgroundColor: "rgba(212,175,55,0.1)",
+                borderColor: colors.primary,
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingVertical: 12,
+                paddingHorizontal: 20,
+                alignItems: "center",
+                gap: 2,
+              }}>
+                <Text style={{ fontSize: 11, color: colors.muted }}>{t("joinPartner.fileNumberLbl")}</Text>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: colors.primary, letterSpacing: 1 }}>
+                  #{applicationId.slice(0, 8).toUpperCase()}
+                </Text>
+              </View>
+            )}
 
             <View style={{
               backgroundColor: colors.surface,
