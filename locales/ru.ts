@@ -110,6 +110,8 @@ const ru = {
   "booking.payDeposit": "Внести задаток (30%)",
   "booking.depositInfo": "Остаток (70%) оплачивается на месте",
   "booking.depositNonRefundable": "Задаток не возвращается при отмене",
+  "booking.payAtVenue": "Оплата в заведении",
+  "booking.payAtVenueDesc": "Оплатите на месте в день визита",
   "booking.clearTable": "Сбросить",
   "booking.date": "ДАТА",
   "booking.time": "ВРЕМЯ",

@@ -110,6 +110,8 @@ const en = {
   "booking.payDeposit": "Pay a deposit (30%)",
   "booking.depositInfo": "The balance (70%) is paid at the venue",
   "booking.depositNonRefundable": "Deposit non-refundable if cancelled",
+  "booking.payAtVenue": "Pay at venue",
+  "booking.payAtVenueDesc": "Pay directly on-site on the day",
   "booking.clearTable": "Clear",
   "booking.date": "DATE",
   "booking.time": "TIME",

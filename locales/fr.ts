@@ -110,6 +110,8 @@ const fr = {
   "booking.payDeposit": "Payer un acompte (30%)",
   "booking.depositInfo": "Le solde (70%) est réglé sur place à l'établissement",
   "booking.depositNonRefundable": "Acompte non remboursable en cas d'annulation",
+  "booking.payAtVenue": "Payer à l'établissement",
+  "booking.payAtVenueDesc": "Réglez directement sur place le jour J",
   "booking.clearTable": "Effacer",
   "booking.date": "DATE",
   "booking.time": "HEURE",

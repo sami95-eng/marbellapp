@@ -110,6 +110,8 @@ const es = {
   "booking.payDeposit": "Pagar una señal (30%)",
   "booking.depositInfo": "El resto (70%) se paga en el establecimiento",
   "booking.depositNonRefundable": "Señal no reembolsable en caso de cancelación",
+  "booking.payAtVenue": "Pagar en el establecimiento",
+  "booking.payAtVenueDesc": "Pague directamente en el lugar el día",
   "booking.clearTable": "Borrar",
   "booking.date": "FECHA",
   "booking.time": "HORA",

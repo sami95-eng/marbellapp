@@ -19,6 +19,7 @@ import { createBooking } from "@/lib/bookings-service";
 import { getAvailableSlots, bookSlot, releaseSlot, type AvailabilitySlot } from "@/lib/availability-service";
 import { getVenueSlotWindow } from "@/lib/venues-service";
 import { getUserVipStatus } from "@/lib/vip-service";
+import { venueAcceptsCash } from "@/lib/subscriptions-service";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -244,9 +245,11 @@ export default function BookingScreen() {
   const [guests, setGuests] = useState("2");
   const [notes, setNotes] = useState("");
   const [phone, setPhone] = useState("");
-  const [payAtVenue, setPayAtVenue] = useState(false); // "Payer à l'établissement" (cash)
-  // Paiement en ligne : totalité ("full") ou acompte 30% ("deposit", solde sur place).
-  const [paymentOption, setPaymentOption] = useState<"full" | "deposit">("full");
+  // Choix de paiement : totalité ("full"), acompte 30% ("deposit") ou paiement
+  // à l'établissement ("cash" — proposé seulement si la venue est abonnée).
+  const [paymentOption, setPaymentOption] = useState<"full" | "deposit" | "cash">("full");
+  // La venue accepte-t-elle le paiement sur place ? (abonnement partenaire actif)
+  const [acceptsCash, setAcceptsCash] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Créneaux de disponibilité définis par l'établissement
@@ -291,6 +294,19 @@ export default function BookingScreen() {
     ? slots.filter((s) => inOpeningWindow(s.time, slotWindow.slot_start, slotWindow.slot_end))
     : slots;
 
+  // La venue accepte le paiement sur place uniquement si elle a un abonnement
+  // partenaire actif (vérifié via RPC SECURITY DEFINER — la RLS bloque la lecture
+  // directe de partner_subscriptions côté client). En démo : toujours proposé.
+  useEffect(() => {
+    if (isDemoMode) { setAcceptsCash(true); return; }
+    if (!venueUuidParam) { setAcceptsCash(false); return; }
+    let cancelled = false;
+    venueAcceptsCash(venueUuidParam)
+      .then((ok) => { if (!cancelled) setAcceptsCash(ok); })
+      .catch(() => { if (!cancelled) setAcceptsCash(false); });
+    return () => { cancelled = true; };
+  }, [venueUuidParam, isDemoMode]);
+
   // Charge la réduction VIP de l'utilisateur (palier Instagram).
   useEffect(() => {
     if (isDemoMode || !user?.id) return;
@@ -312,9 +328,12 @@ export default function BookingScreen() {
       ? (vipDiscountPct > 0 ? Math.round(baseCents * (1 - vipDiscountPct / 100)) : baseCents)
       : null;
   const payable = amountCents != null;
-  // Paiement Stripe uniquement si un montant est dû ET que le client n'a pas
-  // choisi de régler sur place. "Payer à l'établissement" → réservation cash.
-  const useStripeCheckout = payable && !payAtVenue;
+  // Paiement sur place ("cash") : seulement si la venue est abonnée ET que le
+  // client l'a choisi. Robuste si l'abonnement disparaît (acceptsCash repasse à
+  // false → on retombe sur un paiement carte).
+  const isCash = acceptsCash && paymentOption === "cash";
+  // Paiement Stripe uniquement si un montant est dû ET que ce n'est pas du cash.
+  const useStripeCheckout = payable && !isCash;
 
   // Acompte = 30% du total. Si l'option "deposit" est choisie, c'est ce montant
   // qui est encaissé en ligne ; le solde (70%) est réglé sur place à la venue.
@@ -418,7 +437,7 @@ export default function BookingScreen() {
         user_email:          authUser?.email ?? user?.email ?? null,
         user_name:           user?.name || (authUser?.email ?? user?.email ?? "").split("@")[0] || null,
         status:              "pending",
-        payment_method:      payAtVenue ? "cash" : "card",
+        payment_method:      isCash ? "cash" : "card",
         confirmation_number: confirmNum,
         slot_id:             selectedSlot?.id ?? null,
         // Acompte : trace le type de paiement choisi. deposit_amount en euros.
@@ -508,7 +527,7 @@ export default function BookingScreen() {
             tableName:  selectedTable?.name ?? "",
             tablePrice: selectedTable ? String(selectedTable.price_min) : "",
             confirmationNumber: confirmNum,
-            paymentMethod: payAtVenue ? "cash" : "card",
+            paymentMethod: isCash ? "cash" : "card",
           },
         });
       }
@@ -615,54 +634,6 @@ export default function BookingScreen() {
             </View>
           )}
         </View>
-
-        {/* ── Payer à l'établissement (cash) ──────────────────────── */}
-        <TouchableOpacity
-          onPress={() => setPayAtVenue((v) => !v)}
-          activeOpacity={0.8}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: payAtVenue }}
-          style={[cardStyle, {
-            flexDirection: "row", alignItems: "center", gap: 12,
-            borderColor: payAtVenue ? colors.primary : colors.border,
-            borderWidth: payAtVenue ? 1.5 : 1,
-          }]}
-        >
-          <Ionicons
-            name={payAtVenue ? "cash" : "cash-outline"}
-            size={22}
-            color={payAtVenue ? colors.primary : colors.muted}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
-              Payer à l'établissement
-            </Text>
-            <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-              Réservez sans payer en ligne, réglez sur place le jour J.
-            </Text>
-          </View>
-          <View style={{
-            width: 22, height: 22, borderRadius: 11,
-            borderWidth: 2, borderColor: payAtVenue ? colors.primary : colors.border,
-            alignItems: "center", justifyContent: "center",
-            backgroundColor: payAtVenue ? colors.primary : "transparent",
-          }}>
-            {payAtVenue && <Ionicons name="checkmark" size={14} color={colors.onPrimary} />}
-          </View>
-        </TouchableOpacity>
-
-        {/* Message rassurant quand le paiement sur place est choisi */}
-        {payAtVenue && (
-          <View style={{
-            backgroundColor: "rgba(74,222,128,0.12)",
-            borderRadius: 12, padding: 12, marginBottom: 12,
-            borderWidth: 1, borderColor: colors.success,
-          }}>
-            <Text style={{ fontSize: 13, color: colors.success, fontWeight: "600", lineHeight: 19 }}>
-              ✅ Votre place est réservée. Réglez directement à l'établissement le jour J.
-            </Text>
-          </View>
-        )}
 
         {/* ── Date ────────────────────────────────────────────────── */}
         <View style={cardStyle}>
@@ -831,30 +802,30 @@ export default function BookingScreen() {
           <View style={{ flex: 1 }}>
             <Text style={labelStyle}>{t("booking.total") || "TOTAL À PAYER"}</Text>
             <Text style={{ fontSize: 11, color: colors.muted }}>
-              {payAtVenue
+              {isCash
                 ? "Paiement à l'établissement"
                 : (payable && selectedTable ? `Table · ${selectedTable.name}` : "Paiement non requis")}
             </Text>
-            {!payAtVenue && baseCents != null && vipDiscountPct > 0 ? (
+            {!isCash && baseCents != null && vipDiscountPct > 0 ? (
               <Text style={{ fontSize: 11, color: colors.success, fontWeight: "700", marginTop: 4 }}>
                 Réduction VIP {vipTierLabel} −{vipDiscountPct}%
               </Text>
             ) : null}
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            {!payAtVenue && baseCents != null && vipDiscountPct > 0 ? (
+            {!isCash && baseCents != null && vipDiscountPct > 0 ? (
               <Text style={{ fontSize: 12, color: colors.muted, textDecorationLine: "line-through" }}>
                 {formatEur(baseCents)}
               </Text>
             ) : null}
             <Text style={{ fontSize: 22, fontWeight: "800", color: colors.primary }}>
-              {payAtVenue ? "Sur place" : (amountCents != null ? formatEur(amountCents) : "Prix sur demande")}
+              {isCash ? "Sur place" : (amountCents != null ? formatEur(amountCents) : "Prix sur demande")}
             </Text>
           </View>
         </View>
 
-        {/* ── Options de paiement (en ligne) ──────────────────────── */}
-        {useStripeCheckout && amountCents != null && depositCents != null && (
+        {/* ── Options de paiement ─────────────────────────────────── */}
+        {payable && amountCents != null && depositCents != null && (
           <View style={{ marginBottom: 16 }}>
             <Text style={[labelStyle, { marginBottom: 10 }]}>{t("booking.paymentOptions")}</Text>
 
@@ -895,7 +866,7 @@ export default function BookingScreen() {
               accessibilityRole="radio"
               accessibilityState={{ selected: paymentOption === "deposit" }}
               style={[cardStyle, {
-                marginBottom: 0,
+                marginBottom: acceptsCash ? 10 : 0,
                 borderColor: paymentOption === "deposit" ? colors.primary : colors.border,
                 borderWidth: paymentOption === "deposit" ? 1.5 : 1,
               }]}
@@ -922,6 +893,37 @@ export default function BookingScreen() {
                 ⚠️ {t("booking.depositNonRefundable")}
               </Text>
             </TouchableOpacity>
+
+            {/* Option 3 — Payer à l'établissement (cash) — venues abonnées only */}
+            {acceptsCash && (
+              <TouchableOpacity
+                onPress={() => setPaymentOption("cash")}
+                activeOpacity={0.85}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: paymentOption === "cash" }}
+                style={[cardStyle, {
+                  marginTop: 10, marginBottom: 0, flexDirection: "row", alignItems: "center", gap: 12,
+                  borderColor: paymentOption === "cash" ? colors.primary : colors.border,
+                  borderWidth: paymentOption === "cash" ? 1.5 : 1,
+                }]}
+              >
+                <Ionicons
+                  name={paymentOption === "cash" ? "radio-button-on" : "radio-button-off"}
+                  size={20}
+                  color={paymentOption === "cash" ? colors.primary : colors.muted}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
+                    {t("booking.payAtVenue")}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+                    {t("booking.payAtVenueDesc")}
+                  </Text>
+                </View>
+                {/* Rien n'est encaissé en ligne pour un paiement sur place. */}
+                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.muted }}>—</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 

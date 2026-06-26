@@ -82,6 +82,18 @@ export async function getMySubscription(
 }
 
 /**
+ * La venue accepte-t-elle le paiement sur place ("cash") ? Vrai uniquement si
+ * son propriétaire a un abonnement partenaire actif. Passe par la RPC
+ * SECURITY DEFINER venue_accepts_cash (la RLS de partner_subscriptions empêche
+ * un client de lire l'abonnement directement). Renvoie false en cas d'erreur.
+ */
+export async function venueAcceptsCash(venueId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("venue_accepts_cash", { p_venue_id: venueId });
+  if (error) { console.warn("[subscriptions] venueAcceptsCash failed:", error.message); return false; }
+  return data === true;
+}
+
+/**
  * Compteur de réservations espèces + montant dû du mois en cours pour le
  * partenaire connecté. La vue (security_invoker) applique la RLS de l'appelant.
  * Renvoie null si le partenaire n'a pas d'abonnement actif.
