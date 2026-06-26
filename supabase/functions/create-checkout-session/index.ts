@@ -39,7 +39,7 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { bookingId, venueId, amount, currency = "eur" } = await req.json();
+    const { bookingId, venueId, amount, totalAmount, depositOnly = false, currency = "eur" } = await req.json();
 
     if (!bookingId || !venueId || amount == null) {
       return json({ error: "Missing fields: bookingId, venueId, amount" }, 400);
@@ -48,6 +48,11 @@ serve(async (req: Request) => {
     if (!Number.isFinite(amt) || amt <= 0) {
       return json({ error: "Invalid amount (expected positive integer, in cents)" }, 400);
     }
+    // Base de calcul de la commission = le TOTAL de la réservation (pas le montant
+    // encaissé). Pour un acompte (amount < totalAmount), la commission reste donc
+    // 10% du total. Fallback sur amt si totalAmount absent (paiement plein).
+    const totalAmt = Math.round(Number(totalAmount));
+    const feeBasis = Number.isFinite(totalAmt) && totalAmt >= amt ? totalAmt : amt;
 
     // Nom de la venue + compte Stripe connecté (pour la commission).
     let venueName = "Réservation";
@@ -62,14 +67,16 @@ serve(async (req: Request) => {
       chargesEnabled = !!v?.stripe_charges_enabled;
     }
 
-    const fee = Math.round(amt * COMMISSION_RATE);
+    // Commission = 10% du total. Bornée à [0, amt-1] : application_fee_amount doit
+    // rester strictement inférieur au montant encaissé (exigence Stripe Connect).
+    const fee = Math.max(0, Math.min(Math.round(feeBasis * COMMISSION_RATE), amt - 1));
 
     // Données du PaymentIntent : metadata toujours ; commission + reversement
     // seulement si la venue a un compte connecté VÉRIFIÉ (charges_enabled).
     // Sinon Stripe rejette application_fee_amount/transfer_data → paiement
     // simple, la plateforme encaisse tout (comportement par défaut).
     const paymentIntentData: Record<string, unknown> = {
-      metadata: { bookingId, venueId },
+      metadata: { bookingId, venueId, depositOnly: String(!!depositOnly) },
     };
     if (connectedAccount && chargesEnabled) {
       paymentIntentData.application_fee_amount = fee;
@@ -88,8 +95,10 @@ serve(async (req: Request) => {
             currency,
             unit_amount: amt,
             product_data: {
-              name: `Réservation — ${venueName}`,
-              description: `Réservation Marbell'app · réf ${bookingId}`,
+              name: `${depositOnly ? "Acompte (30%) — " : "Réservation — "}${venueName}`,
+              description: depositOnly
+                ? `Acompte non remboursable · solde réglé sur place · réf ${bookingId}`
+                : `Réservation Marbell'app · réf ${bookingId}`,
             },
           },
         },
@@ -97,7 +106,7 @@ serve(async (req: Request) => {
       payment_intent_data: paymentIntentData,
       success_url: `${APP_URL}/booking-confirmation?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/booking`,
-      metadata: { bookingId, venueId },
+      metadata: { bookingId, venueId, depositOnly: String(!!depositOnly) },
     });
 
     return json({ url: session.url }, 200);

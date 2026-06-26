@@ -21,6 +21,10 @@ export interface Booking {
   payment_method: "card" | "cash";
   confirmation_number: string | null;
   slot_id: string | null;
+  // Paiement par acompte : deposit_only = true si seul l'acompte (30%) a été
+  // réglé en ligne ; deposit_amount = montant de l'acompte (en euros).
+  deposit_only: boolean;
+  deposit_amount: number | null;
   created_at: string;
 }
 
