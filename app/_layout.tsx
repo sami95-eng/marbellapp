@@ -29,6 +29,7 @@ import { DemoProvider, useDemo } from "@/lib/demo-context";
 import { consumePartnerLoginIntent } from "@/lib/login-intent";
 import { registerForPushNotifications, setupNotificationHandlers } from "@/lib/push-service";
 import SplashScreen from "./splash";
+import { supabase } from "@/lib/supabase";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -192,6 +193,21 @@ function RootLayoutInner() {
     registerForPushNotifications().then((r) => {
       if (r.status !== "ok") console.log("[push] registration:", r.status, "—", r.reason);
     });
+  }, []);
+
+  // (Ré)enregistre le push token à la connexion/inscription : l'appel au mount
+  // ci-dessus échoue en "no-session" si l'utilisateur se connecte APRÈS le
+  // démarrage. On réessaie donc sur l'événement SIGNED_IN.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        registerForPushNotifications().then((r) => {
+          if (r.status !== "ok") console.log("[push] post-login registration:", r.status, "—", r.reason);
+        });
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {
