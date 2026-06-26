@@ -60,12 +60,34 @@ serve(async (req: Request) => {
         if (bookingId && admin && session.payment_status === "paid") {
           const { data: booking, error: bErr } = await admin
             .from("bookings")
-            .select("user_id, user_email, user_name, venue_id, venue_name, date, time, guests, table_name, table_price, notes, phone_number, confirmation_number")
+            .select("user_id, user_email, user_name, venue_id, venue_name, date, time, guests, table_name, table_price, notes, phone_number, confirmation_number, payment_notified_at")
             .eq("id", bookingId)
             .maybeSingle();
 
           if (bErr || !booking) {
             console.error("[webhook] booking introuvable:", bErr?.message ?? bookingId);
+            break;
+          }
+
+          // Idempotence : si l'email étape 1 a déjà été envoyé, on s'arrête.
+          if (booking.payment_notified_at) {
+            console.warn(`[webhook] booking ${bookingId} déjà notifié (${booking.payment_notified_at}) — skip`);
+            break;
+          }
+
+          // Claim atomique : on ne notifie QUE si on parvient à passer la colonne
+          // de NULL → now() (UPDATE ... WHERE payment_notified_at IS NULL). Si un
+          // retry concurrent l'a déjà fait, 0 ligne renvoyée → on n'envoie pas.
+          const { data: claimed } = await admin
+            .from("bookings")
+            .update({ payment_notified_at: new Date().toISOString() })
+            .eq("id", bookingId)
+            .is("payment_notified_at", null)
+            .select("id")
+            .maybeSingle();
+
+          if (!claimed) {
+            console.warn(`[webhook] booking ${bookingId} notifié en parallèle — skip`);
             break;
           }
 
