@@ -75,3 +75,7 @@ Thumbs.db
 .project-config.json
 
 .vercel
+
+# Local tooling
+.claude/
+.impeccable/
