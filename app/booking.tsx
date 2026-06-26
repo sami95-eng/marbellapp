@@ -426,8 +426,11 @@ export default function BookingScreen() {
         deposit_amount:      isDeposit && depositCents != null ? depositCents / 100 : null,
       });
 
-      // Fire-and-forget email notifications (non-blocking)
-      if (user?.email) {
+      // Notification "étape 1" (demande reçue · sous 2h) à la CRÉATION uniquement
+      // pour les réservations sans paiement carte en ligne : cash ou entrée
+      // gratuite (!useStripeCheckout). Pour la carte, c'est le webhook Stripe qui
+      // déclenche l'étape 1 APRÈS le paiement (sinon on notifierait trop tôt).
+      if (user?.email && !useStripeCheckout) {
         supabase.functions.invoke("booking-notification", {
           body: {
             userId,

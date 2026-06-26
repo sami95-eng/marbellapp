@@ -146,6 +146,17 @@ function buildWhatsAppLink(whatsappNumber: string, d: Record<string, string>): s
 
 // ── Template confirmation utilisateur ─────────────────────────────
 function userConfirmHtml(d: Record<string, string>) {
+  // paid = "true" → la demande arrive APRÈS un paiement carte (déclenchée par le
+  // webhook Stripe). On adapte le wording de l'étape 1.
+  const paid = d.paid === "true";
+  const headEmoji = paid ? "💳" : "📩";
+  const headTitle = paid ? "Paiement reçu" : "Demande de réservation reçue";
+  const headIntro = paid
+    ? `Votre paiement a bien été reçu. Votre demande est transmise à l'établissement,
+       qui vous confirme votre réservation sous <strong style="color:#D4AF37">2 heures</strong>.`
+    : `Votre demande de réservation a bien été reçue. Nous vous confirmons votre
+       réservation dans un délai maximum de <strong style="color:#D4AF37">2 heures</strong>.<br/>
+       En cas de question, contactez-nous directement.`;
   const rows = [
     ["Venue",   d.venueName],
     ["Date",    d.date],
@@ -164,13 +175,11 @@ function userConfirmHtml(d: Record<string, string>) {
   </div>
 
   <div style="text-align:center;margin-bottom:28px">
-    <div style="font-size:52px">📩</div>
-    <h2 style="color:#e8e8e8;font-size:22px;margin:12px 0 8px">Demande de réservation reçue</h2>
+    <div style="font-size:52px">${headEmoji}</div>
+    <h2 style="color:#e8e8e8;font-size:22px;margin:12px 0 8px">${headTitle}</h2>
     <p style="color:#888;font-size:14px;line-height:1.7">
       Bonjour <strong style="color:#D4AF37">${d.userName}</strong>,<br/>
-      Votre demande de réservation a bien été reçue. Nous vous confirmons votre
-      réservation dans un délai maximum de <strong style="color:#D4AF37">2 heures</strong>.<br/>
-      En cas de question, contactez-nous directement.
+      ${headIntro}
     </p>
   </div>
 
@@ -613,12 +622,17 @@ serve(async (req: Request) => {
     // par email : un échec n'annule pas les autres envois ni leur reporting.
     const tasks: { label: string; promise: Promise<void> }[] = [];
 
+    // paid = "true" → l'étape 1 fait suite à un paiement carte (webhook Stripe).
+    const paid = d.paid === "true";
+
     // 1 — Confirmation au client (toujours)
     tasks.push({
       label: "user_email",
       promise: send(
         d.userEmail,
-        `📩 Demande de réservation reçue — ${d.venueName} · ${d.date}`,
+        paid
+          ? `✅ Paiement reçu — votre demande est transmise · ${d.venueName} · ${d.date}`
+          : `📩 Demande de réservation reçue — ${d.venueName} · ${d.date}`,
         userConfirmHtml(d)
       ),
     });
@@ -652,8 +666,10 @@ serve(async (req: Request) => {
         const tok = await getPushToken(d.userId);
         if (tok) await sendExpoPush(
           [tok],
-          "Demande de réservation reçue 📩",
-          `Votre demande chez ${d.venueName} est bien reçue. Réponse sous 2h.`,
+          paid ? "Paiement reçu ✅" : "Demande de réservation reçue 📩",
+          paid
+            ? `Paiement reçu. Votre demande chez ${d.venueName} est transmise — réponse sous 2h.`
+            : `Votre demande chez ${d.venueName} est bien reçue. Réponse sous 2h.`,
           { screen: "/my-reservations" },
         );
       })(),
