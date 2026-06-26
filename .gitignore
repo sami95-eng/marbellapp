@@ -79,3 +79,6 @@ Thumbs.db
 # Local tooling
 .claude/
 .impeccable/
+
+# Supabase CLI local state
+supabase/.temp/
