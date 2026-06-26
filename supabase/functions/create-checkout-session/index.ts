@@ -7,7 +7,7 @@
 //   amount = montant en PLUS PETITE UNITÉ (centimes EUR), ex. 5000 = 50,00 €.
 // Renvoie  : { url } — URL de la page Checkout vers laquelle rediriger.
 //
-// ⚠️ Commission (application_fee_amount = 15%) : nécessite Stripe Connect.
+// ⚠️ Commission (application_fee_amount = 10%) : nécessite Stripe Connect.
 //    Elle n'est appliquée que si la venue a un compte connecté ET vérifié
 //    (venues.stripe_account_id + stripe_charges_enabled). Sinon : paiement
 //    simple, sans commission (la plateforme encaisse tout) + warning.
@@ -23,7 +23,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
 });
 
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.marbellapp.vip").replace(/\/$/, "");
-const COMMISSION_RATE = 0.15; // 15% pour Marbell'app
+const COMMISSION_RATE = 0.10; // 10% pour Marbell'app
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
