@@ -112,7 +112,6 @@ const en = {
   "booking.selectSlotRequired": "Please select an available slot.",
   "booking.slotFull": "This slot just filled up. Please pick another.",
   "booking.dateInPast": "Please choose a date that is not in the past.",
-  "booking.notLoggedIn": "Please log in to confirm your booking.",
   "booking.saveFailed": "Your booking could not be saved. Please try again.",
   "booking.guests": "GUESTS",
   "booking.phone": "PHONE NUMBER",

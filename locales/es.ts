@@ -112,7 +112,6 @@ const es = {
   "booking.selectSlotRequired": "Selecciona un horario disponible.",
   "booking.slotFull": "Este horario acaba de completarse. Elige otro.",
   "booking.dateInPast": "Elige una fecha que no sea del pasado.",
-  "booking.notLoggedIn": "Inicia sesión para confirmar tu reserva.",
   "booking.saveFailed": "No se pudo guardar tu reserva. Inténtalo de nuevo.",
   "booking.guests": "INVITADOS",
   "booking.phone": "NÚMERO DE TELÉFONO",

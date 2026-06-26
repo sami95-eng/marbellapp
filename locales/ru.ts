@@ -112,7 +112,6 @@ const ru = {
   "booking.selectSlotRequired": "Выберите доступный слот.",
   "booking.slotFull": "Этот слот только что заполнился. Выберите другой.",
   "booking.dateInPast": "Выберите дату, которая не в прошлом.",
-  "booking.notLoggedIn": "Войдите, чтобы подтвердить бронирование.",
   "booking.saveFailed": "Не удалось сохранить бронирование. Попробуйте снова.",
   "booking.guests": "ГОСТИ",
   "booking.phone": "НОМЕР ТЕЛЕФОНА",

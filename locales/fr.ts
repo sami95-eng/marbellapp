@@ -112,7 +112,6 @@ const fr = {
   "booking.selectSlotRequired": "Sélectionne un créneau disponible.",
   "booking.slotFull": "Ce créneau vient d'être complété. Choisis-en un autre.",
   "booking.dateInPast": "Choisis une date qui n'est pas dans le passé.",
-  "booking.notLoggedIn": "Connecte-toi pour confirmer ta réservation.",
   "booking.saveFailed": "Ta réservation n'a pas pu être enregistrée. Réessaie.",
   "booking.guests": "INVITÉS",
   "booking.phone": "NUMÉRO DE TÉLÉPHONE",

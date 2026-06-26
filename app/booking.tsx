@@ -326,6 +326,17 @@ export default function BookingScreen() {
       return;
     }
 
+    // Authentification requise : on autorise la simulation (table, date, créneau…)
+    // sans compte, mais la confirmation exige une session. Sans session → on
+    // redirige vers l'écran de connexion (avant de réserver le moindre créneau).
+    {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!(authUser?.id ?? user?.id)) {
+        router.push("/login");
+        return;
+      }
+    }
+
     // Si l'établissement gère des créneaux, il faut en choisir un disponible
     if (hasSlotSystem && windowSlots.length > 0 && !selectedSlot) {
       const msg = t("booking.selectSlotRequired");
@@ -361,11 +372,10 @@ export default function BookingScreen() {
       const userId = authUser?.id ?? user?.id ?? null;
 
       if (!userId) {
-        // Pas de session → on ne peut pas enregistrer ; libère le créneau réservé
+        // Session perdue entre-temps → libère le créneau et renvoie vers /login.
         if (selectedSlot) releaseSlot(selectedSlot.id).catch(() => {});
-        const msg = t("booking.notLoggedIn");
-        if (Platform.OS === "web") window.alert(msg); else Alert.alert(msg);
         setIsSubmitting(false);
+        router.push("/login");
         return;
       }
 
