@@ -28,6 +28,7 @@ import { useOnboarding } from "@/hooks/use-onboarding";
 import { DemoProvider, useDemo } from "@/lib/demo-context";
 import { consumePartnerLoginIntent } from "@/lib/login-intent";
 import { registerForPushNotifications, setupNotificationHandlers } from "@/lib/push-service";
+import SplashScreen from "./splash";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -101,8 +102,6 @@ function AuthRedirect() {
   }, []);
 
   useEffect(() => {
-    if (!splashDone) return;
-
     const stillLoading = (loading || onboardingLoading) && !hardDeadlineFired.current;
     if (stillLoading) return;
 
@@ -114,6 +113,8 @@ function AuthRedirect() {
     console.log("[AuthRedirect] seg=", segments[0], "auth=", isAuthenticated, "loading=", loading);
 
     if (isAuthenticated) {
+      // Laisse le splash s'afficher un minimum (branding) avant d'entrer dans l'app.
+      if (!splashDone) return;
       // Already on a public screen → send to app
       if (inLoginOrSplash || inVerifyEmail) {
         // Connexion via l'onglet "Établissement" → dashboard partenaire (déterministe)
@@ -126,12 +127,12 @@ function AuthRedirect() {
         router.replace("/(tabs)");
       }
     } else {
-      // Not authenticated: only redirect away from the protected tab area.
-      // Explicitly allow login/splash/onboarding screens — never bounce from them.
+      // Non authentifié : on quitte IMMÉDIATEMENT la zone protégée (tabs), sans
+      // attendre le délai de splash → l'interface "connectée" ne reste pas visible.
+      // Les écrans login/splash/onboarding ne sont jamais redirigés.
       if (inAuthGroup) {
         router.replace("/login");
       }
-      // If already on login/splash → do nothing (prevents bounce-back after logout)
     }
   }, [
     loading,
@@ -214,6 +215,10 @@ function RootLayoutInner() {
   );
   const [trpcClient] = useState(() => createTRPCClient());
 
+  // Source d'auth racine : tant que la session Supabase n'est pas confirmée, on
+  // n'affiche QUE le splash (gate plus bas) → jamais l'app « connectée » par défaut.
+  const { loading: authLoading } = useAuth();
+
   const providerInitialMetrics = useMemo(() => {
     const metrics = initialWindowMetrics ?? { insets: initialInsets, frame: initialFrame };
     return {
@@ -277,6 +282,18 @@ function RootLayoutInner() {
     </GestureHandlerRootView>
     </ErrorBoundary>
   );
+
+  // Gate de session : rien de « connecté » tant que getSession() n'a pas répondu.
+  // Par défaut on montre le splash (état neutre / non-connecté).
+  if (authLoading) {
+    return (
+      <ThemeProvider>
+        <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+          <SplashScreen />
+        </SafeAreaProvider>
+      </ThemeProvider>
+    );
+  }
 
   if (Platform.OS === "web") {
     return (

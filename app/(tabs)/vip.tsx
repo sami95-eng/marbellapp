@@ -579,7 +579,7 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
 export default function VipScreen() {
   const router = useRouter();
   const colors = useColors();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { isDemoMode } = useDemo();
 
   const [activeCategory, setActiveCategory] = useState<VipCategory>("tables");
@@ -660,6 +660,18 @@ export default function VipScreen() {
     ),
     [colors]
   );
+
+  // Tant que la session n'est pas confirmée, on n'affiche pas le gate « Se
+  // connecter » (évite un flash non-connecté → connecté). Inutile en mode démo.
+  if (authLoading && !isDemoMode) {
+    return (
+      <ScreenContainer>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   if (!isInstagramUser) {
     return (
