@@ -37,18 +37,15 @@ export function initCrisp(): void {
   // (tab bar, bottom-right). true = inversion vers la gauche.
   window.$crisp.push(["config", "position:reverse", [true]]);
 
-  // Offset vertical : remonte le launcher au-dessus de la tab bar (~56px).
-  // Le launcher Crisp est en position fixed ; un margin-bottom le décale vers le
-  // haut. Sélecteurs Crisp versionnés → on couvre les variantes connues + un
-  // fallback générique (sans effet si la classe change, donc inoffensif).
+  // Offset vertical : remonte le launcher de 80px au-dessus de la tab bar.
+  // Sélecteur ciblé Crisp + fallback #crisp-chatbox (et variante générique au cas
+  // où la classe versionnée change — inoffensif si elle ne matche pas).
   const style = document.createElement("style");
   style.id = "crisp-offset";
-  style.textContent = `
-    .crisp-client .cc-1brb6,
-    .crisp-client [data-visible="true"][class*="cc-"],
-    .crisp-client > div:last-child {
-      margin-bottom: 72px !important;
-    }
+  style.innerHTML = `
+    .crisp-client .crisp-1ixh4oa { bottom: 80px !important; }
+    #crisp-chatbox { margin-bottom: 80px !important; }
+    .crisp-client [data-visible="true"][class*="crisp-"] { bottom: 80px !important; }
   `;
   document.head.appendChild(style);
 }
