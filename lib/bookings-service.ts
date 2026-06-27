@@ -162,6 +162,16 @@ export interface PartnerStats {
   monthly: { months: string[]; values: number[] };
   topVenues: { name: string; bookings: number; revenue: number }[];
   recent: { venueName: string; status: Booking["status"]; date: string }[];
+  // Revenus confirmés du mois courant / précédent + commission plateforme (10%).
+  revenueThisMonth: number;
+  revenueLastMonth: number;
+  commissionThisMonth: number;
+  // Taux de remplissage des créneaux : current_bookings / max_capacity (0..1, ou null).
+  fillRate: number | null;
+  // Tables les plus réservées.
+  topTables: { name: string; bookings: number }[];
+  // Réservations par jour sur les 30 derniers jours.
+  daily: { days: string[]; values: number[] };
 }
 
 export async function getPartnerStats(opts: { userId?: string; isAdmin: boolean }): Promise<PartnerStats> {
@@ -169,6 +179,8 @@ export async function getPartnerStats(opts: { userId?: string; isAdmin: boolean 
     totalBookings: 0, bookingsThisMonth: 0, bookingsLastMonth: 0,
     confirmedRevenue: 0, avgRating: null,
     monthly: { months: [], values: [] }, topVenues: [], recent: [],
+    revenueThisMonth: 0, revenueLastMonth: 0, commissionThisMonth: 0,
+    fillRate: null, topTables: [], daily: { days: [], values: [] },
   };
 
   // 1) Venues dans le périmètre (partenaire = les siennes via owner_id, admin = toutes)
@@ -183,10 +195,26 @@ export async function getPartnerStats(opts: { userId?: string; isAdmin: boolean 
   // 2) Réservations de ces venues
   const { data: rows, error: bErr } = await supabase
     .from("bookings")
-    .select("venue_name, status, table_price, date, created_at")
+    .select("venue_name, status, table_price, table_name, date, created_at")
     .in("venue_id", ids);
   if (bErr) throw new Error(bErr.message);
-  const bookings = (rows ?? []) as Pick<Booking, "venue_name" | "status" | "table_price" | "date" | "created_at">[];
+  const bookings = (rows ?? []) as Pick<Booking, "venue_name" | "status" | "table_price" | "table_name" | "date" | "created_at">[];
+
+  // Capacité des créneaux (pour le taux de remplissage). RLS : le partenaire lit
+  // les créneaux de ses venues ; en cas d'erreur on laisse fillRate à null.
+  let fillRate: number | null = null;
+  try {
+    const { data: slotRows } = await supabase
+      .from("availability_slots")
+      .select("max_capacity, current_bookings")
+      .in("venue_id", ids);
+    let capSum = 0, bookedSum = 0;
+    for (const s of (slotRows ?? []) as { max_capacity: number | null; current_bookings: number | null }[]) {
+      capSum += Number(s.max_capacity) || 0;
+      bookedSum += Number(s.current_bookings) || 0;
+    }
+    fillRate = capSum > 0 ? bookedSum / capSum : null;
+  } catch { /* fillRate stays null */ }
 
   // 3) Agrégats mensuels (clé "YYYY-MM" basée sur la date de réservation)
   const now = new Date();
@@ -196,11 +224,46 @@ export async function getPartnerStats(opts: { userId?: string; isAdmin: boolean 
   const lastKey = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1));
 
   let bookingsThisMonth = 0, bookingsLastMonth = 0, confirmedRevenue = 0;
+  let revenueThisMonth = 0, revenueLastMonth = 0;
   for (const b of bookings) {
     const mk = monthKey(b.date);
     if (mk === curKey) bookingsThisMonth++;
     if (mk === lastKey) bookingsLastMonth++;
-    if (b.status === "confirmed") confirmedRevenue += Number(b.table_price) || 0;
+    if (b.status === "confirmed") {
+      const price = Number(b.table_price) || 0;
+      confirmedRevenue += price;
+      if (mk === curKey) revenueThisMonth += price;
+      if (mk === lastKey) revenueLastMonth += price;
+    }
+  }
+  const COMMISSION_RATE = 0.10; // commission plateforme sur paiements carte
+  const commissionThisMonth = Math.round(revenueThisMonth * COMMISSION_RATE);
+
+  // Top tables (toutes réservations confondues, par nombre de réservations).
+  const byTable = new Map<string, number>();
+  for (const b of bookings) {
+    const name = b.table_name?.trim();
+    if (!name) continue;
+    byTable.set(name, (byTable.get(name) ?? 0) + 1);
+  }
+  const topTables = [...byTable.entries()]
+    .map(([name, count]) => ({ name, bookings: count }))
+    .sort((a, b) => b.bookings - a.bookings)
+    .slice(0, 5);
+
+  // Série des 30 derniers jours (nombre de réservations par jour).
+  const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const dailyCount = new Map<string, number>();
+  for (const b of bookings) {
+    const k = (b.date ?? "").slice(0, 10);
+    if (k) dailyCount.set(k, (dailyCount.get(k) ?? 0) + 1);
+  }
+  const daily = { days: [] as string[], values: [] as number[] };
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const k = dayKey(d);
+    daily.days.push(String(d.getDate()));
+    daily.values.push(dailyCount.get(k) ?? 0);
   }
 
   // 4) Série des 6 derniers mois (nombre de réservations)
@@ -240,5 +303,7 @@ export async function getPartnerStats(opts: { userId?: string; isAdmin: boolean 
     totalBookings: bookings.length,
     bookingsThisMonth, bookingsLastMonth,
     confirmedRevenue, avgRating, monthly, topVenues, recent,
+    revenueThisMonth, revenueLastMonth, commissionThisMonth,
+    fillRate, topTables, daily,
   };
 }

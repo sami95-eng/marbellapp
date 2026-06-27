@@ -1411,13 +1411,96 @@ function StatsTab({ colors, isDemo, isAdmin, userId }: {
     ? DEMO_TOP_OFFERS
     : (stats?.topVenues ?? []).map((v) => ({ name: v.name, bookings: v.bookings, revenue: fmtMoney(v.revenue) }));
 
+  // Nouvelles métriques partenaire (fallback démo pour la présentation).
+  const revThis    = isDemo ? 4250 : (stats?.revenueThisMonth ?? 0);
+  const revLast    = isDemo ? 3680 : (stats?.revenueLastMonth ?? 0);
+  const commission = isDemo ? 425  : (stats?.commissionThisMonth ?? 0);
+  const fill       = isDemo ? 0.68 : (stats?.fillRate ?? null);
+  const topTables  = isDemo
+    ? [{ name: "Table VIP 1", bookings: 14 }, { name: "Lounge A", bookings: 9 }, { name: "Terrasse", bookings: 7 }]
+    : (stats?.topTables ?? []);
+  const daily = isDemo
+    ? { days: Array.from({ length: 30 }, (_, i) => String(i + 1)), values: [2,1,3,0,2,4,5,3,2,1,0,2,3,4,6,5,3,2,1,2,3,4,2,1,0,3,5,4,2,3] }
+    : (stats?.daily ?? { days: [], values: [] });
+  const maxDaily = Math.max(1, ...daily.values);
+  const deltaPct = revLast > 0 ? Math.round(((revThis - revLast) / revLast) * 100) : null;
+
   if (loading) {
     return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 16 }}>
+      {/* Revenus mois courant + commission + comparaison mois précédent */}
+      <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+        <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+          <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.revenueThisMonth")}</Text>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary, marginTop: 4 }}>{fmtMoney(revThis)}</Text>
+          {deltaPct != null && (
+            <Text style={{ fontSize: 11, fontWeight: "700", marginTop: 4, color: deltaPct >= 0 ? colors.success : colors.error }}>
+              {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct)}% {t("partner.vsLastMonth")}
+            </Text>
+          )}
+        </View>
+        <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+          <Text style={{ fontSize: 11, color: colors.muted }}>{t("partner.commission")}</Text>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.foreground, marginTop: 4 }}>{fmtMoney(commission)}</Text>
+          <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>{t("partner.revenueLastMonth")} : {fmtMoney(revLast)}</Text>
+        </View>
+      </View>
+
+      {/* Taux de remplissage des créneaux */}
+      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 20 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <Text style={{ fontSize: 13, color: colors.muted }}>{t("partner.fillRate")}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
+            {fill != null ? `${Math.round(fill * 100)}%` : "—"}
+          </Text>
+        </View>
+        <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.background, overflow: "hidden" }}>
+          <View style={{ height: "100%", width: `${Math.min(100, Math.round((fill ?? 0) * 100))}%`, backgroundColor: colors.primary }} />
+        </View>
+      </View>
+
+      {/* Réservations — 30 derniers jours (par jour) */}
+      <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
+        {t("partner.last30Days")}
+      </Text>
+      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 20 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", height: 90, gap: 2 }}>
+          {daily.values.map((v, i) => (
+            <View key={i} style={{ flex: 1, height: Math.max(2, (v / maxDaily) * 80), backgroundColor: v > 0 ? colors.primary : `${colors.primary}30`, borderRadius: 2 }} />
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+          <Text style={{ fontSize: 9, color: colors.muted }}>J-30</Text>
+          <Text style={{ fontSize: 9, color: colors.muted }}>{t("partner.today") || "Aujourd'hui"}</Text>
+        </View>
+      </View>
+
+      {/* Top tables */}
+      {topTables.length > 0 && (
+        <>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
+            {t("partner.topTables")}
+          </Text>
+          {topTables.map((tbl, i) => (
+            <View key={i} style={{
+              backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 8,
+              flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+              borderWidth: 1, borderColor: colors.border,
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.primary, width: 24 }}>{i + 1}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>{tbl.name}</Text>
+              </View>
+              <Text style={{ fontSize: 11, color: colors.muted }}>{tbl.bookings} {t("partner.bookings")}</Text>
+            </View>
+          ))}
+        </>
+      )}
+
+      <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 16, marginTop: 8 }}>
         {t("partner.bookingsByMonth")}
       </Text>
 
@@ -2519,10 +2602,10 @@ export default function PartnerDashboardScreen() {
     { id: "tables",       label: t("partner.tabTables"),       icon: "🪑" },
     { id: "offers",       label: t("partner.tabOffers"),       icon: "👑" },
     { id: "photos",       label: "Photos",                     icon: "📷" },
-    { id: "stats",        label: t("partner.tabStats"),        icon: "📈" },
-    // Abonnement — visible pour les partenaires (et admins pour le suivi).
+    // Statistiques + Abonnement — réservés aux partenaires (et admins pour le suivi).
     ...((isPartner || isAdmin) ? [
-      { id: "subscription" as Tab, label: "Abonnement", icon: "💰" },
+      { id: "stats" as Tab,        label: t("partner.tabStats"), icon: "📈" },
+      { id: "subscription" as Tab, label: "Abonnement",          icon: "💰" },
     ] : []),
     // Onglets réservés aux admins
     ...(isAdmin ? [
@@ -2629,7 +2712,7 @@ export default function PartnerDashboardScreen() {
           {activeTab === "tables"       && <TablesTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "photos"       && <PhotosTab       colors={colors} isDemo={isDemoMode} userId={user?.id} />}
-          {activeTab === "stats"        && <StatsTab        colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
+          {activeTab === "stats"        && (isPartner || isAdmin) && <StatsTab        colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "subscription" && (isPartner || isAdmin) && <SubscriptionTab colors={colors} isDemo={isDemoMode} userId={user?.id} />}
           {activeTab === "vip-posts"    && isAdmin && <VipPostsTab colors={colors} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
