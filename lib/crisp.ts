@@ -33,8 +33,24 @@ export function initCrisp(): void {
   s.async = true;
   document.getElementsByTagName("head")[0].appendChild(s);
 
-  // bottom-right = position par défaut ; false = pas d'inversion vers la gauche.
-  window.$crisp.push(["config", "position:reverse", [false]]);
+  // Passe le launcher en bottom-LEFT pour ne pas chevaucher le bouton profil
+  // (tab bar, bottom-right). true = inversion vers la gauche.
+  window.$crisp.push(["config", "position:reverse", [true]]);
+
+  // Offset vertical : remonte le launcher au-dessus de la tab bar (~56px).
+  // Le launcher Crisp est en position fixed ; un margin-bottom le décale vers le
+  // haut. Sélecteurs Crisp versionnés → on couvre les variantes connues + un
+  // fallback générique (sans effet si la classe change, donc inoffensif).
+  const style = document.createElement("style");
+  style.id = "crisp-offset";
+  style.textContent = `
+    .crisp-client .cc-1brb6,
+    .crisp-client [data-visible="true"][class*="cc-"],
+    .crisp-client > div:last-child {
+      margin-bottom: 72px !important;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 /**
