@@ -171,6 +171,8 @@ const es = {
   "bookings.cancelConfirm": "¿Seguro que quieres cancelar esta reserva?",
   "bookings.cancelYes": "Sí, cancelar",
   "bookings.leaveReview": "Dejar reseña",
+  "bookings.editReview": "Editar mi reseña",
+  "common.submit": "Enviar",
   "bookings.bookAgain": "Reservar de nuevo",
 
   // ── VIP ───────────────────────────────────────────────────────────

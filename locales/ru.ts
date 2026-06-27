@@ -171,6 +171,8 @@ const ru = {
   "bookings.cancelConfirm": "Вы уверены, что хотите отменить это бронирование?",
   "bookings.cancelYes": "Да, отменить",
   "bookings.leaveReview": "Оставить отзыв",
+  "bookings.editReview": "Изменить отзыв",
+  "common.submit": "Отправить",
   "bookings.bookAgain": "Забронировать снова",
 
   // ── VIP ───────────────────────────────────────────────────────────

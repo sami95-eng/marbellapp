@@ -171,6 +171,8 @@ const en = {
   "bookings.cancelConfirm": "Are you sure you want to cancel this booking?",
   "bookings.cancelYes": "Yes, cancel",
   "bookings.leaveReview": "Leave a Review",
+  "bookings.editReview": "Edit my review",
+  "common.submit": "Submit",
   "bookings.bookAgain": "Book Again",
 
   // ── VIP ───────────────────────────────────────────────────────────
