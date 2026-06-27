@@ -41,9 +41,7 @@ export function initCrisp(): void {
   const style = document.createElement("style");
   style.id = "crisp-offset";
   style.innerHTML = `
-    .cc-165wh { bottom: 80px !important; }
-    .cc-lk42u { bottom: 80px !important; }
-    .cc-2ob4j { bottom: 80px !important; }
+    .cc-13wro { bottom: 80px !important; }
   `;
   document.head.appendChild(style);
 }
