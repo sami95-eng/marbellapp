@@ -38,14 +38,12 @@ export function initCrisp(): void {
   window.$crisp.push(["config", "position:reverse", [true]]);
 
   // Offset vertical : remonte le launcher de 80px au-dessus de la tab bar.
-  // Sélecteur ciblé Crisp + fallback #crisp-chatbox (et variante générique au cas
-  // où la classe versionnée change — inoffensif si elle ne matche pas).
   const style = document.createElement("style");
   style.id = "crisp-offset";
   style.innerHTML = `
-    .crisp-client .crisp-1ixh4oa { bottom: 80px !important; }
-    #crisp-chatbox { margin-bottom: 80px !important; }
-    .crisp-client [data-visible="true"][class*="crisp-"] { bottom: 80px !important; }
+    .cc-165wh { bottom: 80px !important; }
+    .cc-lk42u { bottom: 80px !important; }
+    .cc-2ob4j { bottom: 80px !important; }
   `;
   document.head.appendChild(style);
 }
