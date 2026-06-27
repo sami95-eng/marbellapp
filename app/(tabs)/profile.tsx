@@ -24,6 +24,14 @@ const BADGES: { icon: IoniconName; name: string; unlocked: boolean }[] = [
   { icon: "boat-outline",       name: "Yacht Life",  unlocked: false },
 ];
 
+const RES_STATUS_COLORS: Record<string, string> = {
+  confirmed: "#4ADE80", pending: "#FBBF24", completed: "#D4AF37", cancelled: "#EF4444",
+};
+const fmtResDate = (s: string) => {
+  try { return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+  catch { return s; }
+};
+
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -297,6 +305,44 @@ export default function ProfileScreen() {
                   </View>
                 );
               })}
+            </View>
+          )}
+        </View>
+
+        {/* Mes réservations (aperçu — détail au tap) */}
+        <View style={{ paddingHorizontal: 20, marginTop: 22 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>{t("profile.myReservations")}</Text>
+            {bookings.length > 0 && (
+              <TouchableOpacity onPress={() => router.push("/my-reservations")} activeOpacity={0.7}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>{t("profile.viewAll")}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {bookings.length === 0 ? (
+            <View style={{ backgroundColor: colors.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center", gap: 6 }}>
+              <Ionicons name="calendar-outline" size={24} color={colors.muted} />
+              <Text style={{ fontSize: 13, color: colors.muted }}>{t("profile.noReservations")}</Text>
+            </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {bookings.slice(0, 3).map((b) => (
+                <TouchableOpacity
+                  key={b.id}
+                  activeOpacity={0.75}
+                  onPress={() => router.push({ pathname: "/reservation-detail" as any, params: { id: b.id, venueSlug: b.venue_slug ?? "", venueCategory: b.venue_category ?? "" } })}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.border }}
+                >
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: RES_STATUS_COLORS[b.status] ?? colors.muted }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }} numberOfLines={1}>{b.venue_name}</Text>
+                    <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }} numberOfLines={1}>
+                      {fmtResDate(b.date)} · {b.time}{b.table_price ? ` · €${Number(b.table_price).toLocaleString()}` : ""}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </View>

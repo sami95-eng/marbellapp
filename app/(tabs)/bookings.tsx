@@ -192,8 +192,8 @@ function BookingCard({
             </View>
           )}
 
-          {/* Laisser un avis : uniquement sur une réservation confirmée */}
-          {item.status === "confirmed" && (
+          {/* Laisser un avis : réservation confirmée ET passée (date < aujourd'hui) */}
+          {item.status === "confirmed" && getDisplayTab(item) === "past" && (
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => onReview(item)}

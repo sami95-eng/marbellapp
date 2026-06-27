@@ -71,8 +71,16 @@ export default function MyReservationsScreen() {
     cancelled: t("myRes.cancelled"),
   }[s] ?? s);
 
+  const openDetail = (r: Booking) => router.push({
+    pathname: "/reservation-detail" as any,
+    params: { id: r.id, venueSlug: r.venue_slug ?? "", venueCategory: r.venue_category ?? "" },
+  });
+
   const ReservationCard = ({ r }: { r: Booking }) => (
-    <View style={{
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => openDetail(r)}
+      style={{
       backgroundColor: "#111120", borderRadius: 18, marginBottom: 14,
       overflow: "hidden", borderWidth: 1, borderColor: "rgba(212,175,55,0.15)",
     }}>
@@ -168,7 +176,7 @@ export default function MyReservationsScreen() {
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (

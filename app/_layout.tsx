@@ -278,6 +278,7 @@ function RootLayoutInner() {
                 <Stack.Screen name="booking" />
                 <Stack.Screen name="booking-confirmation" />
                 <Stack.Screen name="my-reservations" />
+                <Stack.Screen name="reservation-detail" />
                 <Stack.Screen name="map" />
                 <Stack.Screen name="settings" options={{ animation: "slide_from_bottom" }} />
                 <Stack.Screen name="favorites" />
