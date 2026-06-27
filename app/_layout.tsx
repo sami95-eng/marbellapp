@@ -30,7 +30,7 @@ import { consumePartnerLoginIntent } from "@/lib/login-intent";
 import { registerForPushNotifications, setupNotificationHandlers } from "@/lib/push-service";
 import SplashScreen from "./splash";
 import { supabase } from "@/lib/supabase";
-import { initCrisp, setCrispUser } from "@/lib/crisp";
+import { HelpFab } from "@/components/help-fab";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -234,15 +234,7 @@ function RootLayoutInner() {
 
   // Source d'auth racine : tant que la session Supabase n'est pas confirmée, on
   // n'affiche QUE le splash (gate plus bas) → jamais l'app « connectée » par défaut.
-  const { user, loading: authLoading } = useAuth();
-
-  // Crisp Chat (web uniquement) : injecte le widget au montage.
-  useEffect(() => { initCrisp(); }, []);
-
-  // Pré-remplit l'identité du visiteur connecté dans Crisp (email + nom).
-  useEffect(() => {
-    if (user?.email || user?.name) setCrispUser(user?.email, user?.name);
-  }, [user?.email, user?.name]);
+  const { loading: authLoading } = useAuth();
 
   const providerInitialMetrics = useMemo(() => {
     const metrics = initialWindowMetrics ?? { insets: initialInsets, frame: initialFrame };
@@ -265,6 +257,7 @@ function RootLayoutInner() {
             <FavoritesProvider>
               <NotificationsProvider>
                 <DemoBanner />
+                <HelpFab />
                 <AuthRedirect />
               <Stack
                 screenOptions={{

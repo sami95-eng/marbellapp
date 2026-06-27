@@ -173,6 +173,7 @@ const ru = {
   "bookings.leaveReview": "Оставить отзыв",
   "bookings.editReview": "Изменить отзыв",
   "common.submit": "Отправить",
+  "help.title": "Помощь",
   "bookings.bookAgain": "Забронировать снова",
 
   // ── VIP ───────────────────────────────────────────────────────────

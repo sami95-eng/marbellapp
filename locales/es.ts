@@ -173,6 +173,7 @@ const es = {
   "bookings.leaveReview": "Dejar reseña",
   "bookings.editReview": "Editar mi reseña",
   "common.submit": "Enviar",
+  "help.title": "Ayuda",
   "bookings.bookAgain": "Reservar de nuevo",
 
   // ── VIP ───────────────────────────────────────────────────────────

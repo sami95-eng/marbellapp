@@ -173,6 +173,7 @@ const en = {
   "bookings.leaveReview": "Leave a Review",
   "bookings.editReview": "Edit my review",
   "common.submit": "Submit",
+  "help.title": "Help",
   "bookings.bookAgain": "Book Again",
 
   // ── VIP ───────────────────────────────────────────────────────────

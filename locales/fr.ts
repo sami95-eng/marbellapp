@@ -173,6 +173,7 @@ const fr = {
   "bookings.leaveReview": "Laisser un avis",
   "bookings.editReview": "Modifier mon avis",
   "common.submit": "Envoyer",
+  "help.title": "Aide",
   "bookings.bookAgain": "Réserver à nouveau",
 
   // ── VIP ───────────────────────────────────────────────────────────
