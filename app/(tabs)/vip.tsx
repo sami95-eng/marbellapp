@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Image } from "expo-image";
@@ -23,6 +24,7 @@ import {
   type VipEventDiscount,
   type VipMemberPerk,
 } from "@/hooks/use-vip";
+import { submitPost } from "@/lib/vip-service";
 
 type VipCategory = "tables" | "discounts" | "members";
 type TierKey = "bronze" | "silver" | "gold" | "platinum";
@@ -302,6 +304,8 @@ const TIER_NEXT: Record<TierKey, { label: string; at: number } | null> = {
   platinum: null,
 };
 const TIER_FLOOR: Record<TierKey, number> = { bronze: 0, silver: 5, gold: 15, platinum: 30 };
+// Réduction par palier (cohérente avec les perks affichés sur cet écran).
+const TIER_DISCOUNT: Record<TierKey, number> = { bronze: 5, silver: 10, gold: 20, platinum: 40 };
 
 function TierBadge({ tier, posts, colors }: { tier: TierKey; posts: number; colors: ReturnType<typeof useColors> }) {
   const t = VIP_TIERS[tier];
@@ -326,6 +330,16 @@ function TierBadge({ tier, posts, colors }: { tier: TierKey; posts: number; colo
           <Text style={{ fontSize: 22, fontWeight: "800", color: t.color }}>{posts}</Text>
           <Text style={{ fontSize: 10, color: colors.muted }}>posts partenaires</Text>
         </View>
+      </View>
+
+      {/* Réduction actuelle — bien visible */}
+      <View style={{
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 10,
+        paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14,
+      }}>
+        <Text style={{ fontSize: 13, color: colors.foreground, fontWeight: "600" }}>Ta réduction actuelle</Text>
+        <Text style={{ fontSize: 20, fontWeight: "800", color: t.color }}>{TIER_DISCOUNT[tier]}%</Text>
       </View>
 
       {/* Progression vers le tier suivant */}
@@ -584,6 +598,11 @@ export default function VipScreen() {
 
   const [activeCategory, setActiveCategory] = useState<VipCategory>("tables");
 
+  // Soumission d'un post Instagram (directement depuis l'écran VIP).
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [postUrl, setPostUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
   const { offers, discounts, perks, loading } = useVipData();
 
   // partner_post_count est mis à jour manuellement par l'admin (18 en démo).
@@ -605,6 +624,27 @@ export default function VipScreen() {
       if (Platform.OS === "web") window.alert(msg); else Alert.alert("Instagram", msg);
     }
   }, [saveProfile]);
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  // Soumet un post Instagram (URL) → vip_posts (statut "pending", validé par l'admin).
+  const handleSubmitPost = useCallback(async () => {
+    const url = postUrl.trim();
+    if (!url.toLowerCase().includes("instagram.com")) {
+      notify("Colle l'URL d'un post Instagram (doit contenir « instagram.com »).");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await submitPost(url, profile?.instagram_handle ?? "");
+      setPostUrl(""); setShowSubmit(false);
+      notify("Post soumis ! Il sera validé par l'équipe.");
+    } catch (e: any) {
+      notify(e?.message ?? "Échec de l'envoi.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [postUrl, profile?.instagram_handle]);
 
   const partnerPosts = isDemoMode ? 18 : (profile?.partner_post_count ?? 0);
   const currentTier: TierKey =
@@ -705,6 +745,21 @@ export default function VipScreen() {
           <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
             Offres exclusives · Réservé aux membres Instagram
           </Text>
+          {/* Soumettre un post Instagram — directement depuis l'écran VIP */}
+          <TouchableOpacity
+            onPress={() => { setPostUrl(""); setShowSubmit(true); }}
+            activeOpacity={0.85}
+            style={{
+              marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8,
+              backgroundColor: colors.primary, borderRadius: 50,
+              paddingVertical: 10, paddingHorizontal: 20,
+            }}
+          >
+            <Text style={{ fontSize: 14 }}>📸</Text>
+            <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 13 }}>
+              Soumettre un post Instagram
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Category Tabs */}
@@ -797,6 +852,46 @@ export default function VipScreen() {
           />
         )}
       </View>
+
+      {/* Modal : soumettre un post Instagram */}
+      <Modal visible={showSubmit} transparent animationType="slide" onRequestClose={() => setShowSubmit(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, borderWidth: 1, borderColor: colors.border, gap: 14 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Soumettre un post</Text>
+              <TouchableOpacity onPress={() => setShowSubmit(false)} accessibilityRole="button" accessibilityLabel="Fermer">
+                <Text style={{ fontSize: 22, color: colors.muted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 19 }}>
+              Colle l'URL de ton post Instagram où tu tagues un établissement partenaire. Une fois validé par l'équipe, il fait grimper ton palier VIP.
+            </Text>
+            <TextInput
+              value={postUrl}
+              onChangeText={setPostUrl}
+              placeholder="https://www.instagram.com/p/..."
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{
+                backgroundColor: colors.surface, color: colors.foreground, borderRadius: 12,
+                paddingHorizontal: 14, paddingVertical: 12, fontSize: 14,
+                borderWidth: 1, borderColor: colors.border,
+              }}
+            />
+            <TouchableOpacity
+              onPress={handleSubmitPost}
+              disabled={submitting}
+              activeOpacity={0.85}
+              style={{ backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 15, alignItems: "center", opacity: submitting ? 0.6 : 1 }}
+            >
+              {submitting
+                ? <ActivityIndicator color={colors.onPrimary} />
+                : <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
