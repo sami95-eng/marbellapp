@@ -8,8 +8,8 @@ const GOLD = "#D4AF37";
 const INK = "#0A0E13";
 const CREAM = "#E8E8E8";
 
-// TODO: remplacer par le vrai numéro WhatsApp (format international sans +, ex: 34600112233).
-const WHATSAPP_NUMBER = "0000000000";
+// Numéro WhatsApp support (format international sans +).
+const WHATSAPP_NUMBER = "41779632324";
 const SUPPORT_EMAIL = "contact@marbellapp.vip";
 
 /**
