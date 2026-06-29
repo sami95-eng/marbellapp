@@ -174,6 +174,8 @@ const fr = {
   "bookings.editReview": "Modifier mon avis",
   "common.submit": "Envoyer",
   "help.title": "Aide",
+  "install.ios": "📲 Installez l'app : appuyez sur Partager ⬆️ puis « Sur l'écran d'accueil »",
+  "install.android": "📲 Installez l'app : appuyez sur le menu ⋮ puis « Ajouter à l'écran d'accueil »",
   "bookings.bookAgain": "Réserver à nouveau",
 
   // ── VIP ───────────────────────────────────────────────────────────

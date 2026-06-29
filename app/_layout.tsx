@@ -31,6 +31,7 @@ import { registerForPushNotifications, setupNotificationHandlers } from "@/lib/p
 import SplashScreen from "./splash";
 import { supabase } from "@/lib/supabase";
 import { HelpFab } from "@/components/help-fab";
+import { InstallBanner } from "@/components/install-banner";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -257,6 +258,7 @@ function RootLayoutInner() {
             <FavoritesProvider>
               <NotificationsProvider>
                 <DemoBanner />
+                <InstallBanner />
                 <HelpFab />
                 <AuthRedirect />
               <Stack
