@@ -245,9 +245,9 @@ export default function BookingScreen() {
   const [guests, setGuests] = useState("2");
   const [notes, setNotes] = useState("");
   const [phone, setPhone] = useState("");
-  // Choix de paiement : totalité ("full"), acompte 30% ("deposit") ou paiement
-  // à l'établissement ("cash" — proposé seulement si la venue est abonnée).
-  const [paymentOption, setPaymentOption] = useState<"full" | "deposit" | "cash">("full");
+  // Choix de paiement : totalité en ligne ("full") ou paiement sur place
+  // ("cash" — proposé seulement si la venue est abonnée au plan partenaire).
+  const [paymentOption, setPaymentOption] = useState<"full" | "cash">("full");
   // La venue accepte-t-elle le paiement sur place ? (abonnement partenaire actif)
   const [acceptsCash, setAcceptsCash] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -333,17 +333,9 @@ export default function BookingScreen() {
   // false → on retombe sur un paiement carte).
   const isCash = acceptsCash && paymentOption === "cash";
   // Paiement Stripe uniquement si un montant est dû ET que ce n'est pas du cash.
+  // Le montant encaissé en ligne est toujours la totalité (amountCents) : plus
+  // d'acompte partiel depuis la suppression de cette option.
   const useStripeCheckout = payable && !isCash;
-
-  // Acompte = 30% du total. Si l'option "deposit" est choisie, c'est ce montant
-  // qui est encaissé en ligne ; le solde (70%) est réglé sur place à la venue.
-  const DEPOSIT_RATE = 0.30;
-  const depositCents: number | null =
-    amountCents != null ? Math.round(amountCents * DEPOSIT_RATE) : null;
-  const isDeposit = useStripeCheckout && paymentOption === "deposit";
-  // Montant réellement encaissé en ligne (acompte ou totalité).
-  const chargeCents: number | null =
-    amountCents == null ? null : (isDeposit ? depositCents : amountCents);
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -440,9 +432,10 @@ export default function BookingScreen() {
         payment_method:      isCash ? "cash" : "card",
         confirmation_number: confirmNum,
         slot_id:             selectedSlot?.id ?? null,
-        // Acompte : trace le type de paiement choisi. deposit_amount en euros.
-        deposit_only:        isDeposit,
-        deposit_amount:      isDeposit && depositCents != null ? depositCents / 100 : null,
+        // Acompte supprimé du flow : paiement toujours en totalité (carte) ou
+        // sur place (cash) — plus jamais de paiement partiel.
+        deposit_only:        false,
+        deposit_amount:      null,
       });
 
       // Notification "étape 1" (demande reçue · sous 2h) à la CRÉATION uniquement
@@ -470,22 +463,21 @@ export default function BookingScreen() {
         }).catch((e) => console.warn("[booking] notification email failed:", e?.message));
       }
 
-      if (useStripeCheckout && chargeCents && amountCents) {
+      if (useStripeCheckout && amountCents) {
         // ── Paiement Stripe Checkout ─────────────────────────────────
         // Crée la session côté serveur puis redirige vers la page Stripe.
         // (Au retour, success_url renvoie vers /booking-confirmation ; le
         //  webhook confirme la réservation après paiement.)
-        // amount = montant encaissé (acompte ou totalité) ; totalAmount = total
-        // de la réservation → la commission plateforme reste 10% du TOTAL.
+        // amount = totalAmount = totalité de la réservation → la commission
+        // plateforme reste 10% du total (calculée côté edge function).
         const { data: checkout, error: checkoutErr } = await supabase.functions.invoke(
           "create-checkout-session",
           {
             body: {
               bookingId:   created.id,
               venueId:     venueUuidParam || venueId,
-              amount:      chargeCents,  // montant encaissé en ligne (centimes)
+              amount:      amountCents,  // totalité de la réservation (centimes)
               totalAmount: amountCents,  // total de la réservation (centimes)
-              depositOnly: isDeposit,
               currency:    "eur",
             },
           },
@@ -825,18 +817,18 @@ export default function BookingScreen() {
         </View>
 
         {/* ── Options de paiement ─────────────────────────────────── */}
-        {payable && amountCents != null && depositCents != null && (
+        {payable && amountCents != null && (
           <View style={{ marginBottom: 16 }}>
             <Text style={[labelStyle, { marginBottom: 10 }]}>{t("booking.paymentOptions")}</Text>
 
-            {/* Option 1 — Payer la totalité */}
+            {/* Option 1 — Payer la totalité en ligne */}
             <TouchableOpacity
               onPress={() => setPaymentOption("full")}
               activeOpacity={0.85}
               accessibilityRole="radio"
               accessibilityState={{ selected: paymentOption === "full" }}
               style={[cardStyle, {
-                marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12,
+                marginBottom: acceptsCash ? 10 : 0, flexDirection: "row", alignItems: "center", gap: 12,
                 borderColor: paymentOption === "full" ? colors.primary : colors.border,
                 borderWidth: paymentOption === "full" ? 1.5 : 1,
               }]}
@@ -859,70 +851,41 @@ export default function BookingScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Option 2 — Payer un acompte (30%) */}
-            <TouchableOpacity
-              onPress={() => setPaymentOption("deposit")}
-              activeOpacity={0.85}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: paymentOption === "deposit" }}
-              style={[cardStyle, {
-                marginBottom: acceptsCash ? 10 : 0,
-                borderColor: paymentOption === "deposit" ? colors.primary : colors.border,
-                borderWidth: paymentOption === "deposit" ? 1.5 : 1,
-              }]}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <Ionicons
-                  name={paymentOption === "deposit" ? "radio-button-on" : "radio-button-off"}
-                  size={20}
-                  color={paymentOption === "deposit" ? colors.primary : colors.muted}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
-                    {t("booking.payDeposit")}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                    {t("booking.depositInfo")}
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 16, fontWeight: "800", color: colors.primary }}>
-                  {formatEur(depositCents)}
+            {/* Option 2 — Payer à l'établissement (cash) — venues abonnées only */}
+            {acceptsCash && (
+              <View>
+                <TouchableOpacity
+                  onPress={() => setPaymentOption("cash")}
+                  activeOpacity={0.85}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: paymentOption === "cash" }}
+                  style={[cardStyle, {
+                    marginBottom: 0, flexDirection: "row", alignItems: "center", gap: 12,
+                    borderColor: paymentOption === "cash" ? colors.primary : colors.border,
+                    borderWidth: paymentOption === "cash" ? 1.5 : 1,
+                  }]}
+                >
+                  <Ionicons
+                    name={paymentOption === "cash" ? "radio-button-on" : "radio-button-off"}
+                    size={20}
+                    color={paymentOption === "cash" ? colors.primary : colors.muted}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
+                      {t("booking.payAtVenue")}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+                      {t("booking.payAtVenueDesc")}
+                    </Text>
+                  </View>
+                  {/* Rien n'est encaissé en ligne pour un paiement sur place. */}
+                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.muted }}>—</Text>
+                </TouchableOpacity>
+                {/* Avertissement : le paiement sur place ne garantit pas la table. */}
+                <Text style={{ fontSize: 11, color: colors.warning, fontWeight: "600", lineHeight: 16, marginTop: 8, paddingHorizontal: 4 }}>
+                  ⚠️ {t("booking.payAtVenueWarning")}
                 </Text>
               </View>
-              <Text style={{ fontSize: 11, color: colors.error, fontWeight: "600", marginTop: 8 }}>
-                ⚠️ {t("booking.depositNonRefundable")}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Option 3 — Payer à l'établissement (cash) — venues abonnées only */}
-            {acceptsCash && (
-              <TouchableOpacity
-                onPress={() => setPaymentOption("cash")}
-                activeOpacity={0.85}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: paymentOption === "cash" }}
-                style={[cardStyle, {
-                  marginTop: 10, marginBottom: 0, flexDirection: "row", alignItems: "center", gap: 12,
-                  borderColor: paymentOption === "cash" ? colors.primary : colors.border,
-                  borderWidth: paymentOption === "cash" ? 1.5 : 1,
-                }]}
-              >
-                <Ionicons
-                  name={paymentOption === "cash" ? "radio-button-on" : "radio-button-off"}
-                  size={20}
-                  color={paymentOption === "cash" ? colors.primary : colors.muted}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
-                    {t("booking.payAtVenue")}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                    {t("booking.payAtVenueDesc")}
-                  </Text>
-                </View>
-                {/* Rien n'est encaissé en ligne pour un paiement sur place. */}
-                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.muted }}>—</Text>
-              </TouchableOpacity>
             )}
           </View>
         )}
@@ -947,8 +910,8 @@ export default function BookingScreen() {
             <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 16 }}>
-              {useStripeCheckout && chargeCents != null
-                ? `${t("booking.confirmAndPay") || "Confirmer et payer"} · ${formatEur(chargeCents)}`
+              {useStripeCheckout && amountCents != null
+                ? `${t("booking.confirmAndPay") || "Confirmer et payer"} · ${formatEur(amountCents)}`
                 : (t("booking.confirmBtn") || "Confirmer la réservation")}
             </Text>
           )}
