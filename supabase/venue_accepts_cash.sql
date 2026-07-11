@@ -1,10 +1,14 @@
 -- =================================================================
--- Marbell'app — "Payer à l'établissement" conditionné à l'abonnement
--- La table partner_subscriptions est protégée par RLS (partner_id = auth.uid()) :
--- un CLIENT ne peut donc pas lire l'abonnement de la venue. Cette fonction
--- SECURITY DEFINER expose uniquement un booléen "la venue accepte le cash"
--- (= son propriétaire a un abonnement partenaire actif), sans divulguer la
--- moindre donnée d'abonnement.
+-- Marbell'app — "Payer à l'établissement" accepté par défaut
+-- Le paiement en espèces sur place est proposé pour TOUTE venue existante,
+-- indépendamment de tout abonnement partenaire. La fonction reste
+-- SECURITY DEFINER (aucune donnée d'abonnement n'est exposée) et STABLE.
+--
+-- Historique : cette RPC vérifiait auparavant qu'un abonnement partenaire
+-- 'active' existait (JOIN partner_subscriptions). Le cash a été DÉCOUPLÉ de
+-- l'abonnement — on ne conserve qu'un contrôle d'existence de la venue
+-- (→ false pour un UUID inconnu, true sinon).
+--
 -- Script idempotent : rejouable sans erreur.
 -- Instructions : Supabase Dashboard → SQL Editor → New Query → RUN
 -- =================================================================
@@ -16,16 +20,18 @@ SECURITY DEFINER
 SET search_path = public
 STABLE
 AS $$
+  -- Cash découplé de l'abonnement partenaire : toute venue EXISTANTE accepte
+  -- le paiement sur place par défaut. Plus aucune dépendance à
+  -- partner_subscriptions ; on garde seulement le contrôle d'existence.
   SELECT EXISTS (
     SELECT 1
     FROM public.venues v
-    JOIN public.partner_subscriptions ps ON ps.partner_id = v.owner_id
     WHERE v.id = p_venue_id
-      AND ps.status = 'active'
   );
 $$;
 
 GRANT EXECUTE ON FUNCTION public.venue_accepts_cash(UUID) TO authenticated, anon;
 
 -- ── Vérification ─────────────────────────────────────────────────
--- SELECT public.venue_accepts_cash('00000000-0000-0000-0000-000000000000');
+-- SELECT public.venue_accepts_cash('505c1b6b-3490-4d42-aed5-0548a98372b3'); -- true  (venue existante)
+-- SELECT public.venue_accepts_cash('00000000-0000-0000-0000-000000000000'); -- false (venue inconnue)
