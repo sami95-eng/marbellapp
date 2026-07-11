@@ -12,6 +12,7 @@ import {
   Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -30,56 +31,22 @@ type VipCategory = "tables" | "discounts" | "members";
 type TierKey = "bronze" | "silver" | "gold" | "platinum";
 
 // --- Tier system ---
+// Valeurs NON textuelles (label proper-noun + couleur/bg/icône). Les "perks"
+// (textes) vivent dans i18n : t(tierPerksKey(slug), { returnObjects: true }).
 const VIP_TIERS: Record<TierKey, {
   label: string; color: string; bg: string; icon: string;
-  requirement: string; perks: string[];
 }> = {
-  bronze: {
-    label: "Bronze", color: "#CD7F32", bg: "rgba(205,127,50,0.12)", icon: "🥉",
-    requirement: "0 – 4 posts",
-    perks: [
-      "Liste prioritaire pour les réservations",
-      "5% de réduction sur les venues sélectionnées",
-      "Newsletter exclusive Marbell'app",
-      "Accès aux offres de la semaine",
-    ],
-  },
-  silver: {
-    label: "Silver", color: "#A8A9AD", bg: "rgba(168,169,173,0.12)", icon: "🥈",
-    requirement: "5 – 14 posts",
-    perks: [
-      "Toutes les offres Bronze",
-      "File prioritaire dans tous les venues partenaires",
-      "10% de réduction sur les tables VIP",
-      "Cocktail de bienvenue offert",
-      "Accès aux événements membres mensuels",
-    ],
-  },
-  gold: {
-    label: "Gold", color: "#D4AF37", bg: "rgba(212,175,55,0.12)", icon: "🥇",
-    requirement: "15 – 29 posts",
-    perks: [
-      "Toutes les offres Silver",
-      "20% de réduction exclusive sur toutes les venues",
-      "Bouteille offerte pour toute table VIP",
-      "Réservation prioritaire 48h avant l'ouverture",
-      "Accès aux événements privés Gold",
-      "Upgrade automatique à la meilleure table disponible",
-    ],
-  },
-  platinum: {
-    label: "Platinum", color: "#E8E8E8", bg: "rgba(232,232,232,0.12)", icon: "💎",
-    requirement: "30+ posts",
-    perks: [
-      "Toutes les offres Gold",
-      "40% de réduction exclusive — le meilleur tarif",
-      "Concierge personnel 24h/24 7j/7",
-      "Accès backstage aux événements Starlite",
-      "Dîners privés avec les chefs étoilés",
-      "Accès aux yachts privatisés Puerto Banús",
-      "Invitation aux galas et soirées fermées",
-    ],
-  },
+  bronze:   { label: "Bronze",   color: "#CD7F32", bg: "rgba(205,127,50,0.12)", icon: "🥉" },
+  silver:   { label: "Silver",   color: "#A8A9AD", bg: "rgba(168,169,173,0.12)", icon: "🥈" },
+  gold:     { label: "Gold",     color: "#D4AF37", bg: "rgba(212,175,55,0.12)", icon: "🥇" },
+  platinum: { label: "Platinum", color: "#E8E8E8", bg: "rgba(232,232,232,0.12)", icon: "💎" },
+};
+
+// Clé i18n des perks d'un palier (tableau via returnObjects). Slug inconnu → bronze.
+const TIER_ORDER: TierKey[] = ["bronze", "silver", "gold", "platinum"];
+const tierPerksKey = (slug: string): string => {
+  const s: TierKey = (TIER_ORDER as string[]).includes(slug) ? (slug as TierKey) : "bronze";
+  return `vip.tier${s.charAt(0).toUpperCase()}${s.slice(1)}Perks`;
 };
 
 // --- Sub-Components ---
@@ -112,8 +79,8 @@ function CategoryTab({
 const OFFER_TYPE_ICONS: Record<string, string> = {
   table: "🪑", bed: "🛏️", bottle: "🍾", private: "🔒",
 };
-const OFFER_TYPE_LABELS: Record<string, string> = {
-  table: "Table", bed: "Lit/Daybed", bottle: "Bouteille", private: "Privatif",
+const OFFER_TYPE_LABEL_KEYS: Record<string, string> = {
+  table: "vip.offerTypeTable", bed: "vip.offerTypeBed", bottle: "vip.offerTypeBottle", private: "vip.offerTypePrivate",
 };
 
 function VipOfferCard({
@@ -121,6 +88,7 @@ function VipOfferCard({
 }: {
   item: VipOffer; colors: ReturnType<typeof useColors>; onBook: (item: VipOffer) => void;
 }) {
+  const { t } = useTranslation();
   const savings = item.original_price - item.vip_price;
   const savingsPercent = Math.round((savings / item.original_price) * 100);
 
@@ -156,7 +124,7 @@ function VipOfferCard({
           flexDirection: "row", alignItems: "center", gap: 4,
         }}>
           <Text style={{ fontSize: 12 }}>{OFFER_TYPE_ICONS[item.offer_type] ?? "🎯"}</Text>
-          <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600" }}>{OFFER_TYPE_LABELS[item.offer_type] ?? item.offer_type}</Text>
+          <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600" }}>{OFFER_TYPE_LABEL_KEYS[item.offer_type] ? t(OFFER_TYPE_LABEL_KEYS[item.offer_type]) : item.offer_type}</Text>
         </View>
       </View>
 
@@ -199,19 +167,19 @@ function VipOfferCard({
             </Text>
             <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
               <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary }}>€{item.vip_price}</Text>
-              <Text style={{ fontSize: 12, color: colors.muted }}>prix VIP</Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>{t("vip.vipPrice")}</Text>
             </View>
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={{ fontSize: 11, color: item.spots_left <= 2 ? "#EF4444" : colors.muted, marginBottom: 6 }}>
-              {item.spots_left} place{item.spots_left > 1 ? "s" : ""} restante{item.spots_left > 1 ? "s" : ""}
+              {t("vip.spotsRemaining", { count: item.spots_left })}
             </Text>
             <TouchableOpacity
               onPress={() => onBook(item)}
               activeOpacity={0.7}
               style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 10 }}
             >
-              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>Réserver</Text>
+              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 14 }}>{t("vip.bookTable")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -225,6 +193,7 @@ function DiscountCard({
 }: {
   item: VipEventDiscount; colors: ReturnType<typeof useColors>; onCopy: (code: string) => void;
 }) {
+  const { t } = useTranslation();
   const discountedPrice = Math.round(item.original_price * (1 - item.discount_pct / 100));
 
   return (
@@ -260,7 +229,7 @@ function DiscountCard({
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Text style={{ fontSize: 13 }}>⏰</Text>
-            <Text style={{ fontSize: 12, color: colors.muted }}>Jusqu'au {item.valid_until}</Text>
+            <Text style={{ fontSize: 12, color: colors.muted }}>{t("vip.until", { date: item.valid_until })}</Text>
           </View>
         </View>
 
@@ -270,7 +239,7 @@ function DiscountCard({
           borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
         }}>
           <View>
-            <Text style={{ fontSize: 11, color: colors.muted }}>CODE PROMO</Text>
+            <Text style={{ fontSize: 11, color: colors.muted }}>{t("vip.promoCode")}</Text>
             <Text style={{ fontSize: 16, fontWeight: "800", color: colors.primary, letterSpacing: 2 }}>
               {item.code}
             </Text>
@@ -287,7 +256,7 @@ function DiscountCard({
               activeOpacity={0.7}
               style={{ backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8, marginTop: 4 }}
             >
-              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>Copier</Text>
+              <Text style={{ color: "#0A0E13", fontWeight: "700", fontSize: 12 }}>{t("vip.copyCode")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -306,10 +275,11 @@ const TIER_UI: Record<string, { icon: string; bg: string }> = {
   platinum: { icon: "💎", bg: "rgba(232,232,232,0.12)" },
 };
 const tierUi = (slug: string) => TIER_UI[slug] ?? TIER_UI.bronze;
-const tierPerks = (slug: string) => (VIP_TIERS[slug as TierKey] ?? VIP_TIERS.bronze).perks;
 
 function TierBadge({ status, colors }: { status: VipStatus; colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   const slug = status.tier.tier;
+  const perks = t(tierPerksKey(slug), { returnObjects: true }) as unknown as string[];
   const ui = tierUi(slug);
   const color = status.tier.color;
   const posts = status.post_count;
@@ -326,13 +296,13 @@ function TierBadge({ status, colors }: { status: VipStatus; colors: ReturnType<t
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 }}>
         <Text style={{ fontSize: 32 }}>{ui.icon}</Text>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600" }}>TON NIVEAU ACTUEL</Text>
+          <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600" }}>{t("vip.currentTier")}</Text>
           <Text style={{ fontSize: 22, fontWeight: "800", color }}>{status.tier.label}</Text>
-          <Text style={{ fontSize: 12, color: colors.muted }}>{floor}+ posts approuvés</Text>
+          <Text style={{ fontSize: 12, color: colors.muted }}>{t("vip.approvedPostsFloor", { count: floor })}</Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontSize: 22, fontWeight: "800", color }}>{posts}</Text>
-          <Text style={{ fontSize: 10, color: colors.muted }}>posts approuvés</Text>
+          <Text style={{ fontSize: 10, color: colors.muted }}>{t("vip.approvedPosts")}</Text>
         </View>
       </View>
 
@@ -342,7 +312,7 @@ function TierBadge({ status, colors }: { status: VipStatus; colors: ReturnType<t
         backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 10,
         paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14,
       }}>
-        <Text style={{ fontSize: 13, color: colors.foreground, fontWeight: "600" }}>Ta réduction actuelle</Text>
+        <Text style={{ fontSize: 13, color: colors.foreground, fontWeight: "600" }}>{t("vip.currentDiscount")}</Text>
         <Text style={{ fontSize: 20, fontWeight: "800", color }}>{status.discount_pct}%</Text>
       </View>
 
@@ -353,13 +323,13 @@ function TierBadge({ status, colors }: { status: VipStatus; colors: ReturnType<t
         </View>
         <Text style={{ fontSize: 11, color: colors.muted, marginTop: 6 }}>
           {next
-            ? `Plus que ${remaining} post${remaining > 1 ? "s" : ""} pour atteindre ${next.label} (${next.discount_pct}%)`
-            : "Niveau maximum atteint — merci pour ton soutien ! 🎉"}
+            ? t("vip.postsToNextTier", { count: remaining, tier: next.label, pct: next.discount_pct })
+            : t("vip.maxTierReached")}
         </Text>
       </View>
 
       <View style={{ gap: 6 }}>
-        {tierPerks(slug).map((perk) => (
+        {perks.map((perk) => (
           <View key={perk} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={{ color, fontSize: 13 }}>✓</Text>
             <Text style={{ fontSize: 13, color: colors.foreground }}>{perk}</Text>
@@ -371,18 +341,21 @@ function TierBadge({ status, colors }: { status: VipStatus; colors: ReturnType<t
 }
 
 function TierComparisonRow({ tiers, colors }: { tiers: VipTier[]; colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   const sorted = [...tiers].sort((a, b) => a.min_posts - b.min_posts);
   return (
     <View style={{ marginBottom: 20 }}>
       <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
-        Tous les niveaux
+        {t("vip.allTiers")}
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
         {sorted.map((tier, i) => {
           const ui = tierUi(tier.tier);
-          const perks = tierPerks(tier.tier);
+          const perks = t(tierPerksKey(tier.tier), { returnObjects: true }) as unknown as string[];
           const nextAt = sorted[i + 1]?.min_posts;
-          const requirement = nextAt != null ? `${tier.min_posts}–${nextAt - 1} posts` : `${tier.min_posts}+ posts`;
+          const requirement = nextAt != null
+            ? t("vip.postsRange", { min: tier.min_posts, max: nextAt - 1 })
+            : t("vip.postsMin", { min: tier.min_posts });
           return (
             <View key={tier.tier} style={{
               width: 180, backgroundColor: colors.surface, borderRadius: 12,
@@ -401,7 +374,7 @@ function TierComparisonRow({ tiers, colors }: { tiers: VipTier[]; colors: Return
               ))}
               {perks.length > 3 && (
                 <Text style={{ fontSize: 11, color: tier.color, marginTop: 4 }}>
-                  +{perks.length - 3} autres avantages
+                  {t("vip.morePerks", { count: perks.length - 3 })}
                 </Text>
               )}
             </View>
@@ -454,21 +427,19 @@ function MemberOfferCard({ item, colors }: { item: VipMemberPerk; colors: Return
 
 // --- Section explicative "Comment ça marche" (basée sur les posts Instagram) ---
 const VIP_STEPS = [
-  { n: "1", icon: "📸", title: "Renseigne ton Instagram",
-    desc: "Indique ton compte Instagram dans Marbell'app." },
-  { n: "2", icon: "👑", title: "Profite de l'expérience",
-    desc: "Accède aux offres exclusives de nos partenaires : tables VIP, réductions et invitations privées." },
-  { n: "3", icon: "🔓", title: "Partage ta soirée",
-    desc: "Poste sur Instagram en taguant l'établissement et débloque encore plus d'avantages." },
+  { n: "1", icon: "📸", titleKey: "vip.step1Title", descKey: "vip.step1Desc" },
+  { n: "2", icon: "👑", titleKey: "vip.step2Title", descKey: "vip.step2Desc" },
+  { n: "3", icon: "🔓", titleKey: "vip.step3Title", descKey: "vip.step3Desc" },
 ];
 
 function HowItWorksVIP({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   return (
     <View style={{ marginBottom: 20 }}>
       <View style={{ alignItems: "center", marginBottom: 14 }}>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Comment ça marche</Text>
+        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{t("vip.howItWorks")}</Text>
         <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center", marginTop: 4, lineHeight: 18 }}>
-          Plus tu postes et tagues les établissements partenaires, plus tu débloques d'avantages.
+          {t("vip.howItWorksSub")}
         </Text>
       </View>
 
@@ -491,9 +462,9 @@ function HowItWorksVIP({ colors }: { colors: ReturnType<typeof useColors> }) {
                 fontSize: 11, fontWeight: "800", color: "#0A0E13", backgroundColor: "#D4AF37",
                 width: 18, height: 18, borderRadius: 9, textAlign: "center", overflow: "hidden", lineHeight: 18,
               }}>{s.n}</Text>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{s.title}</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{t(s.titleKey)}</Text>
             </View>
-            <Text style={{ fontSize: 12.5, color: colors.muted, marginTop: 4, lineHeight: 18 }}>{s.desc}</Text>
+            <Text style={{ fontSize: 12.5, color: colors.muted, marginTop: 4, lineHeight: 18 }}>{t(s.descKey)}</Text>
           </View>
         </View>
       ))}
@@ -503,9 +474,7 @@ function HowItWorksVIP({ colors }: { colors: ReturnType<typeof useColors> }) {
         borderWidth: 1, borderColor: "rgba(212,175,55,0.18)",
       }}>
         <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center", lineHeight: 18 }}>
-          ✨ Le statut VIP récompense tes{" "}
-          <Text style={{ color: colors.primary, fontWeight: "700" }}>posts Instagram</Text> chez les partenaires —{" "}
-          <Text style={{ color: colors.primary, fontWeight: "700" }}>pas</Text> ton nombre de followers.
+          {t("vip.howItWorksNote")}
         </Text>
       </View>
     </View>
@@ -516,6 +485,7 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
   isAuthenticated: boolean; router: ReturnType<typeof useRouter>; colors: ReturnType<typeof useColors>;
   onSaveHandle: (handle: string) => void; saving: boolean;
 }) {
+  const { t } = useTranslation();
   const [handle, setHandle] = useState("");
   const valid = handle.trim().replace(/^@/, "").length >= 2;
 
@@ -528,19 +498,17 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
         <View style={{ alignItems: "center", gap: 14, marginBottom: 24 }}>
           <Text style={{ fontSize: 56 }}>👑</Text>
           <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary, textAlign: "center" }}>
-            Accès VIP
+            {t("vip.title")}
           </Text>
           <Text style={{ fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 22 }}>
-            {isAuthenticated
-              ? "Renseigne ton compte Instagram pour débloquer les offres VIP de nos établissements partenaires."
-              : "Connecte-toi à ton compte Marbell'app, puis renseigne ton Instagram pour accéder aux offres VIP."}
+            {isAuthenticated ? t("vip.gateAuthDesc") : t("vip.gateUnauthDesc")}
           </Text>
         </View>
 
         {isAuthenticated ? (
           <View style={{ marginBottom: 28, gap: 10 }}>
             <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "600", marginLeft: 4, letterSpacing: 0.5 }}>
-              TON COMPTE INSTAGRAM
+              {t("vip.yourInstagram")}
             </Text>
             <View style={{
               flexDirection: "row", alignItems: "center",
@@ -551,7 +519,7 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
               <TextInput
                 value={handle}
                 onChangeText={(v) => setHandle(v.replace(/\s/g, ""))}
-                placeholder="moncompte"
+                placeholder={t("vip.handlePlaceholder")}
                 placeholderTextColor="#555"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -569,10 +537,10 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
             >
               {saving
                 ? <ActivityIndicator color="#0A0E13" />
-                : <Text style={{ color: valid ? "#0A0E13" : "#666", fontWeight: "800", fontSize: 15 }}>Débloquer mon accès VIP</Text>}
+                : <Text style={{ color: valid ? "#0A0E13" : "#666", fontWeight: "800", fontSize: 15 }}>{t("vip.unlockVip")}</Text>}
             </TouchableOpacity>
             <Text style={{ fontSize: 11, color: colors.muted, textAlign: "center", marginTop: 2 }}>
-              Tague les établissements partenaires dans tes posts pour faire grimper ton niveau.
+              {t("vip.gateHint")}
             </Text>
           </View>
         ) : (
@@ -585,7 +553,7 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
               }}
               activeOpacity={0.85}
             >
-              <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 15 }}>Se connecter</Text>
+              <Text style={{ color: "#0A0E13", fontWeight: "800", fontSize: 15 }}>{t("vip.signIn")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -598,6 +566,7 @@ function InstagramGate({ isAuthenticated, router, colors, onSaveHandle, saving }
 
 // --- Main Screen ---
 export default function VipScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colors = useColors();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -653,7 +622,7 @@ export default function VipScreen() {
     try {
       await saveProfile({ instagram_handle: h });
     } catch (e: any) {
-      const msg = e?.message ?? "Échec de l'enregistrement.";
+      const msg = e?.message ?? t("vip.saveHandleError");
       if (Platform.OS === "web") window.alert(msg); else Alert.alert("Instagram", msg);
     }
   }, [saveProfile]);
@@ -664,16 +633,16 @@ export default function VipScreen() {
   const handleSubmitPost = useCallback(async () => {
     const url = postUrl.trim();
     if (!url.toLowerCase().includes("instagram.com")) {
-      notify("Colle l'URL d'un post Instagram (doit contenir « instagram.com »).");
+      notify(t("vip.invalidPostUrl"));
       return;
     }
     setSubmitting(true);
     try {
       await submitPost(url, profile?.instagram_handle ?? "");
       setPostUrl(""); setShowSubmit(false);
-      notify("Post soumis ! Il sera validé par l'équipe.");
+      notify(t("vip.postSubmitted"));
     } catch (e: any) {
-      notify(e?.message ?? "Échec de l'envoi.");
+      notify(e?.message ?? t("vip.submitError"));
     } finally {
       setSubmitting(false);
     }
@@ -689,7 +658,7 @@ export default function VipScreen() {
         date:            item.event_date,
         type:            item.offer_type,
         instagramHandle: item.instagram_handle ?? "",
-        requirement:     `Poste une story ou un reel en taguant ${item.instagram_handle} le soir même`,
+        requirement:     t("vip.bookRequirement", { handle: item.instagram_handle }),
       },
     });
   }, [router]);
@@ -698,12 +667,12 @@ export default function VipScreen() {
     if (Platform.OS === "web") {
       try {
         navigator.clipboard.writeText(code);
-        Alert.alert("Code copié !", `Code : ${code}`);
+        Alert.alert(t("vip.codeCopied"), t("vip.codeMessage", { code }));
       } catch {
-        Alert.alert("Code promo", `Code : ${code}`);
+        Alert.alert(t("vip.promoCode"), t("vip.codeMessage", { code }));
       }
     } else {
-      Alert.alert("Code copié !", `Code : ${code}`);
+      Alert.alert(t("vip.codeCopied"), t("vip.codeMessage", { code }));
     }
   }, []);
 
@@ -757,7 +726,7 @@ export default function VipScreen() {
       <ScreenContainer>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
           <ActivityIndicator color="#D4AF37" size="large" />
-          <Text style={{ color: colors.muted, fontSize: 13 }}>Chargement des offres VIP…</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>{t("vip.loadingOffers")}</Text>
         </View>
       </ScreenContainer>
     );
@@ -768,9 +737,9 @@ export default function VipScreen() {
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, alignItems: "center" }}>
-          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary }}>👑 VIP Access</Text>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary }}>👑 {t("vip.title")}</Text>
           <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
-            Offres exclusives · Réservé aux membres Instagram
+            {t("vip.headerSubtitle")}
           </Text>
           {/* Soumettre un post Instagram — directement depuis l'écran VIP */}
           <TouchableOpacity
@@ -784,18 +753,18 @@ export default function VipScreen() {
           >
             <Text style={{ fontSize: 14 }}>📸</Text>
             <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 13 }}>
-              Soumettre un post Instagram
+              {t("vip.submitPostCta")}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Category Tabs */}
         <View style={{ flexDirection: "row", paddingHorizontal: 20, gap: 8, marginBottom: 16 }}>
-          <CategoryTab label="Tables & Beds" icon="🍾" active={activeCategory === "tables"}
+          <CategoryTab label={t("vip.catTables")} icon="🍾" active={activeCategory === "tables"}
             onPress={() => setActiveCategory("tables")} colors={colors} />
-          <CategoryTab label="Réductions" icon="🏷️" active={activeCategory === "discounts"}
+          <CategoryTab label={t("vip.discounts")} icon="🏷️" active={activeCategory === "discounts"}
             onPress={() => setActiveCategory("discounts")} colors={colors} />
-          <CategoryTab label="Mon Tier" icon="💎" active={activeCategory === "members"}
+          <CategoryTab label={t("vip.catMyTier")} icon="💎" active={activeCategory === "members"}
             onPress={() => setActiveCategory("members")} colors={colors} />
         </View>
 
@@ -811,10 +780,10 @@ export default function VipScreen() {
                 <HowItWorksVIP colors={colors} />
                 <View style={{ marginBottom: 14 }}>
                   <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>
-                    Offres de la Semaine
+                    {t("vip.weeklyOffers")}
                   </Text>
                   <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
-                    Tables · Daybeds · Bouteilles · Accès Privatifs
+                    {t("vip.weeklyOffersDesc")}
                   </Text>
                 </View>
               </View>
@@ -822,7 +791,7 @@ export default function VipScreen() {
             ListEmptyComponent={
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>🍾</Text>
-                <Text style={{ color: colors.muted, fontSize: 14 }}>Aucune offre disponible</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>{t("vip.noOffers")}</Text>
               </View>
             }
           />
@@ -838,17 +807,17 @@ export default function VipScreen() {
             ListHeaderComponent={
               <View style={{ marginBottom: 14 }}>
                 <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>
-                  Codes & Réductions
+                  {t("vip.codesDiscounts")}
                 </Text>
                 <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
-                  Présente le code au venue pour en bénéficier
+                  {t("vip.codesDiscountsDesc")}
                 </Text>
               </View>
             }
             ListEmptyComponent={
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>🏷️</Text>
-                <Text style={{ color: colors.muted, fontSize: 14 }}>Aucune réduction disponible</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>{t("vip.noDiscounts")}</Text>
               </View>
             }
           />
@@ -866,14 +835,14 @@ export default function VipScreen() {
                 {vipStatus && <TierBadge status={vipStatus} colors={colors} />}
                 {allTiers.length > 0 && <TierComparisonRow tiers={allTiers} colors={colors} />}
                 <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
-                  Avantages Membres
+                  {t("vip.memberBenefits")}
                 </Text>
               </View>
             }
             ListEmptyComponent={
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>💎</Text>
-                <Text style={{ color: colors.muted, fontSize: 14 }}>Aucun avantage disponible</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>{t("vip.noBenefits")}</Text>
               </View>
             }
           />
@@ -885,13 +854,13 @@ export default function VipScreen() {
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
           <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, borderWidth: 1, borderColor: colors.border, gap: 14 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Soumettre un post</Text>
-              <TouchableOpacity onPress={() => setShowSubmit(false)} accessibilityRole="button" accessibilityLabel="Fermer">
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{t("vip.submitPostTitle")}</Text>
+              <TouchableOpacity onPress={() => setShowSubmit(false)} accessibilityRole="button" accessibilityLabel={t("vip.close")}>
                 <Text style={{ fontSize: 22, color: colors.muted }}>✕</Text>
               </TouchableOpacity>
             </View>
             <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 19 }}>
-              Colle l'URL de ton post Instagram où tu tagues un établissement partenaire. Une fois validé par l'équipe, il fait grimper ton palier VIP.
+              {t("vip.submitPostDesc")}
             </Text>
             <TextInput
               value={postUrl}
@@ -914,7 +883,7 @@ export default function VipScreen() {
             >
               {submitting
                 ? <ActivityIndicator color={colors.onPrimary} />
-                : <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 15 }}>Envoyer</Text>}
+                : <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 15 }}>{t("vip.send")}</Text>}
             </TouchableOpacity>
           </View>
         </View>
