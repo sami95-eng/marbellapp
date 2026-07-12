@@ -11,10 +11,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@16.12.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
-  apiVersion: "2024-06-20",
-  httpClient: Stripe.createFetchHttpClient(),
-});
+// ⚠️ PHASE DE TEST Connect : utilise STRIPE_SECRET_KEY_TEST (sk_test_) si définie,
+// sinon fallback sur la clé live. create-checkout-session (paiements clients) reste
+// sur STRIPE_SECRET_KEY (live) et n'est PAS impacté.
+const stripe = new Stripe(
+  Deno.env.get("STRIPE_SECRET_KEY_TEST") ?? Deno.env.get("STRIPE_SECRET_KEY") ?? "",
+  {
+    apiVersion: "2024-06-20",
+    httpClient: Stripe.createFetchHttpClient(),
+  },
+);
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -41,13 +47,15 @@ serve(async (req: Request) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+    // Colonne de TEST isolée (voir supabase/stripe_connect_test.sql) — ne lit PAS
+    // stripe_account_id (live) utilisé par le flow de paiement client.
     const { data: venues, error: vErr } = await admin
       .from("venues")
-      .select("id, stripe_account_id")
+      .select("id, stripe_account_id_test")
       .eq("owner_id", user.id);
     if (vErr) return json({ error: vErr.message }, 500);
 
-    const accountId = (venues ?? []).find((v) => v.stripe_account_id)?.stripe_account_id as string | undefined;
+    const accountId = (venues ?? []).find((v) => v.stripe_account_id_test)?.stripe_account_id_test as string | undefined;
     if (!accountId) {
       return json({ connected: false, charges_enabled: false, details_submitted: false }, 200);
     }
@@ -57,12 +65,14 @@ serve(async (req: Request) => {
     const charges_enabled = !!account.charges_enabled;
     const details_submitted = !!account.details_submitted;
 
-    // Synchronise les drapeaux en base (utilisés par create-checkout-session).
+    // Synchronise les drapeaux de TEST en base (colonnes *_test). NB : on n'écrit
+    // PAS stripe_charges_enabled (live), pour ne jamais activer le split côté
+    // create-checkout-session avec un compte de test.
     await admin
       .from("venues")
       .update({
-        stripe_charges_enabled: charges_enabled,
-        stripe_details_submitted: details_submitted,
+        stripe_charges_enabled_test: charges_enabled,
+        stripe_details_submitted_test: details_submitted,
       })
       .eq("owner_id", user.id);
 

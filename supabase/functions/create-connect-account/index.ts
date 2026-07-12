@@ -13,10 +13,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@16.12.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
-  apiVersion: "2024-06-20",
-  httpClient: Stripe.createFetchHttpClient(),
-});
+// ⚠️ PHASE DE TEST Connect : utilise STRIPE_SECRET_KEY_TEST (sk_test_) si définie,
+// sinon fallback sur la clé live. Le flow de paiement client (create-checkout-session)
+// reste sur STRIPE_SECRET_KEY (live) et n'est PAS impacté par ce fallback.
+const stripe = new Stripe(
+  Deno.env.get("STRIPE_SECRET_KEY_TEST") ?? Deno.env.get("STRIPE_SECRET_KEY") ?? "",
+  {
+    apiVersion: "2024-06-20",
+    httpClient: Stripe.createFetchHttpClient(),
+  },
+);
 
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.marbellapp.vip").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -46,17 +52,19 @@ serve(async (req: Request) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     // ── Venues du partenaire (owner_id) ────────────────────────────
+    // Colonne de TEST isolée : ne partage pas stripe_account_id (live) — voir
+    // supabase/stripe_connect_test.sql.
     const { data: venues, error: vErr } = await admin
       .from("venues")
-      .select("id, stripe_account_id")
+      .select("id, stripe_account_id_test")
       .eq("owner_id", user.id);
     if (vErr) return json({ error: vErr.message }, 500);
     if (!venues || venues.length === 0) {
       return json({ error: "Aucun établissement associé à votre compte." }, 400);
     }
 
-    // ── Compte Connect : réutilise l'existant ou en crée un Express ─
-    let accountId = (venues.find((v) => v.stripe_account_id)?.stripe_account_id as string | undefined) ?? null;
+    // ── Compte Connect (test) : réutilise l'existant ou en crée un Express ─
+    let accountId = (venues.find((v) => v.stripe_account_id_test)?.stripe_account_id_test as string | undefined) ?? null;
     if (!accountId) {
       const account = await stripe.accounts.create({
         type: "express",
@@ -69,10 +77,10 @@ serve(async (req: Request) => {
       });
       accountId = account.id;
 
-      // Rattache le compte à TOUTES les venues du partenaire.
+      // Rattache le compte test à TOUTES les venues du partenaire (colonne *_test).
       const { error: upErr } = await admin
         .from("venues")
-        .update({ stripe_account_id: accountId })
+        .update({ stripe_account_id_test: accountId })
         .eq("owner_id", user.id);
       if (upErr) return json({ error: upErr.message }, 500);
     }
