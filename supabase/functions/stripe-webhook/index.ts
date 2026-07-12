@@ -133,6 +133,32 @@ serve(async (req: Request) => {
         console.warn(`[webhook] session expirée pour booking ${session.metadata?.bookingId ?? "?"}`);
         break;
       }
+      // ── Sync Connect (LIVE) : quand un compte partenaire change (fin de KYC,
+      //    activation des paiements/payouts…), Stripe envoie account.updated. On
+      //    répercute charges/details/payouts en base (colonnes LIVE) via
+      //    stripe_account_id, sans appel manuel à check-connect-status.
+      //    ⚠️ Requiert que l'endpoint écoute les events des comptes connectés
+      //    (Connect). Colonne stripe_payouts_enabled : voir
+      //    supabase/stripe_connect_payouts.sql.
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        if (!admin) break;
+        const { data: synced, error: aErr } = await admin
+          .from("venues")
+          .update({
+            stripe_charges_enabled:   !!account.charges_enabled,
+            stripe_details_submitted: !!account.details_submitted,
+            stripe_payouts_enabled:   !!account.payouts_enabled,
+          })
+          .eq("stripe_account_id", account.id)
+          .select("id");
+        if (aErr) {
+          console.error(`[webhook] account.updated sync échouée pour ${account.id}:`, aErr.message);
+        } else {
+          console.warn(`[webhook] account.updated ${account.id} → ${synced?.length ?? 0} venue(s) synchronisée(s) (charges=${account.charges_enabled}, details=${account.details_submitted}, payouts=${account.payouts_enabled})`);
+        }
+        break;
+      }
       default:
         // Autres événements ignorés.
         break;
