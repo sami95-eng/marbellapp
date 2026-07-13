@@ -42,8 +42,12 @@ import {
   getConnectStatus, startConnectOnboarding,
   type ConnectStatus,
 } from "@/lib/subscriptions-service";
+import {
+  createVipSubscriptionLink, getVipSubscribers, vipPriceLabel, vipStatusLabel,
+  type VipSubscriber,
+} from "@/lib/vip-subscriptions-service";
 
-type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts" | "payments";
+type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts" | "payments" | "vip-subscribers";
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
 // Resolves the emoji icons coming from demo-data / metric arrays to the
@@ -2338,6 +2342,126 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
 // Le système d'abonnements Starter/Pro/Premium est désactivé pour l'instant :
 // les fonctions restent dans subscriptions-service.ts mais ne sont plus appelées.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// VIP Subscribers Tab (admin) — génère un lien d'abonnement "Marbellapp VIP"
+// pour un client + liste des abonnés. Produit Stripe séparé (vip_subscriptions).
+// ─────────────────────────────────────────────────────────────────────────────
+function VipSubscribersTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [genUrl, setGenUrl] = useState<string | null>(null);
+  const [subs, setSubs] = useState<VipSubscriber[]>([]);
+  const [loading, setLoading] = useState(!isDemo);
+  const [error, setError] = useState<string | null>(null);
+
+  const notify = (m: string) => { if (Platform.OS === "web") window.alert(m); else Alert.alert(m); };
+
+  const load = useCallback(async () => {
+    if (isDemo) {
+      setSubs([{
+        id: "demo-1", name: "Client Démo", email: "demo@vip.com",
+        stripe_customer_id: null, stripe_subscription_id: null, stripe_schedule_id: null,
+        status: "trialing", current_price_id: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true); setError(null);
+    try { setSubs(await getVipSubscribers()); }
+    catch (e: any) { setError(e.message ?? "Erreur de chargement"); }
+    finally { setLoading(false); }
+  }, [isDemo]);
+  useEffect(() => { load(); }, [load]);
+
+  const generate = async () => {
+    if (generating) return;
+    const em = email.trim();
+    if (!em.includes("@")) { notify("Email invalide."); return; }
+    if (isDemo) { notify("Mode démo — génération indisponible."); return; }
+    setGenerating(true); setGenUrl(null);
+    try { setGenUrl(await createVipSubscriptionLink(name.trim(), em)); }
+    catch (e: any) { notify(e.message ?? "Échec de la génération du lien."); }
+    finally { setGenerating(false); }
+  };
+
+  const copyLink = async () => {
+    if (!genUrl) return;
+    if (Platform.OS === "web") {
+      try { await navigator.clipboard.writeText(genUrl); notify("Lien copié !"); }
+      catch { notify(genUrl); }
+    } else {
+      notify(genUrl); // affichage pour copie manuelle sur natif
+    }
+  };
+
+  const inputStyle = {
+    backgroundColor: colors.background, color: colors.foreground, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border,
+  } as const;
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10 }}>
+        NOUVEL ABONNÉ VIP
+      </Text>
+      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 20, gap: 12 }}>
+        <TextInput value={name} onChangeText={setName} placeholder="Nom du client" placeholderTextColor={colors.muted} style={inputStyle} />
+        <TextInput value={email} onChangeText={setEmail} placeholder="Email du client" placeholderTextColor={colors.muted}
+          keyboardType="email-address" autoCapitalize="none" autoCorrect={false} style={inputStyle} />
+        <TouchableOpacity onPress={generate} disabled={generating} activeOpacity={0.85}
+          style={{ backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 13, alignItems: "center", opacity: generating ? 0.6 : 1 }}>
+          {generating ? <ActivityIndicator color={colors.onPrimary} />
+            : <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 15 }}>Générer le lien de paiement</Text>}
+        </TouchableOpacity>
+        {genUrl ? (
+          <View style={{ gap: 8, marginTop: 4 }}>
+            <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ fontSize: 12, color: colors.foreground }} numberOfLines={2}>{genUrl}</Text>
+            </View>
+            <TouchableOpacity onPress={copyLink} activeOpacity={0.85}
+              style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 50, paddingVertical: 10, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}>
+              <Ionicons name="copy-outline" size={16} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>Copier le lien</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+
+      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10 }}>
+        ABONNÉS ({subs.length})
+      </Text>
+      {loading ? (
+        <View style={{ paddingVertical: 30, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>
+      ) : error ? (
+        <View style={{ paddingVertical: 20, alignItems: "center", gap: 8 }}>
+          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{error}</Text>
+          <TouchableOpacity onPress={load}><Text style={{ color: colors.primary, fontWeight: "700" }}>Réessayer</Text></TouchableOpacity>
+        </View>
+      ) : subs.length === 0 ? (
+        <Text style={{ color: colors.muted, fontSize: 13, paddingVertical: 20, textAlign: "center" }}>Aucun abonné pour l'instant.</Text>
+      ) : (
+        subs.map((s) => (
+          <View key={s.id} style={{ backgroundColor: colors.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }} numberOfLines={1}>{s.name || "—"}</Text>
+              <View style={{ backgroundColor: s.status === "canceled" ? "rgba(148,163,184,0.15)" : "rgba(74,222,128,0.15)", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: s.status === "canceled" ? colors.muted : colors.success }}>{vipStatusLabel(s.status)}</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }} numberOfLines={1}>{s.email}</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary }}>{vipPriceLabel(s.current_price_id)} / mois</Text>
+              <Text style={{ fontSize: 11, color: colors.muted }}>Depuis {new Date(s.created_at).toLocaleDateString("fr-FR")}</Text>
+            </View>
+          </View>
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
 function PaymentsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
   // ── Stripe Connect ───────────────────────────────────────────────
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
@@ -2473,6 +2597,7 @@ export default function PartnerDashboardScreen() {
     // Onglets réservés aux admins
     ...(isAdmin ? [
       { id: "vip-posts" as Tab, label: "Posts VIP", icon: "📸" },
+      { id: "vip-subscribers" as Tab, label: "Abonnés VIP", icon: "⭐" },
       { id: "clients" as Tab, label: t("admin.clients"), icon: "👥" },
     ] : []),
   ];
@@ -2578,6 +2703,7 @@ export default function PartnerDashboardScreen() {
           {activeTab === "stats"        && (isPartner || isAdmin) && <StatsTab        colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "payments"     && (isPartner || isAdmin) && <PaymentsTab     colors={colors} isDemo={isDemoMode} />}
           {activeTab === "vip-posts"    && isAdmin && <VipPostsTab colors={colors} />}
+          {activeTab === "vip-subscribers" && isAdmin && <VipSubscribersTab colors={colors} isDemo={isDemoMode} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
         </View>
       </View>
