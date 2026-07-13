@@ -294,9 +294,9 @@ export default function BookingScreen() {
     ? slots.filter((s) => inOpeningWindow(s.time, slotWindow.slot_start, slotWindow.slot_end))
     : slots;
 
-  // La venue accepte le paiement sur place uniquement si elle a un abonnement
-  // partenaire actif (vérifié via RPC SECURITY DEFINER — la RLS bloque la lecture
-  // directe de partner_subscriptions côté client). En démo : toujours proposé.
+  // Le paiement sur place ("cash") est accepté par défaut pour toute venue
+  // existante (RPC SECURITY DEFINER venue_accepts_cash — découplé de l'abonnement
+  // partenaire). En démo : toujours proposé.
   useEffect(() => {
     if (isDemoMode) { setAcceptsCash(true); return; }
     if (!venueUuidParam) { setAcceptsCash(false); return; }

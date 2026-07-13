@@ -39,12 +39,11 @@ import {
   type AdminClient, type ClientBooking,
 } from "@/lib/clients-service";
 import {
-  getMySubscription, getMyCashFeesThisMonth, PLAN_LABELS,
   getConnectStatus, startConnectOnboarding,
-  type PartnerSubscription, type PartnerCashFees, type ConnectStatus,
+  type ConnectStatus,
 } from "@/lib/subscriptions-service";
 
-type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts" | "subscription";
+type Tab = "overview" | "reservations" | "availability" | "tables" | "offers" | "photos" | "stats" | "clients" | "vip-posts" | "payments";
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
 // Resolves the emoji icons coming from demo-data / metric arrays to the
@@ -2335,17 +2334,11 @@ function ClientsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; 
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
-// Subscription Tab — formule du partenaire + total dû en espèces (mois en cours)
+// Payments Tab — onboarding Stripe Connect du partenaire (encaissement direct).
+// Le système d'abonnements Starter/Pro/Premium est désactivé pour l'instant :
+// les fonctions restent dans subscriptions-service.ts mais ne sont plus appelées.
 // ─────────────────────────────────────────────────────────────────────────────
-const SUBSCRIBE_EMAIL = "contact@marbellapp.vip";
-
-function SubscriptionTab({ colors, isDemo, userId }: { colors: ReturnType<typeof useColors>; isDemo: boolean; userId?: string }) {
-  const { t } = useTranslation();
-  const [sub, setSub]     = useState<PartnerSubscription | null>(null);
-  const [fees, setFees]   = useState<PartnerCashFees | null>(null);
-  const [loading, setLoading] = useState(!isDemo);
-  const [error, setError]     = useState<string | null>(null);
-
+function PaymentsTab({ colors, isDemo }: { colors: ReturnType<typeof useColors>; isDemo: boolean }) {
   // ── Stripe Connect ───────────────────────────────────────────────
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectLoading, setConnectLoading] = useState(!isDemo);
@@ -2387,127 +2380,8 @@ function SubscriptionTab({ colors, isDemo, userId }: { colors: ReturnType<typeof
     }
   };
 
-  const load = useCallback(async () => {
-    if (isDemo) {
-      setSub({
-        id: "demo-sub", partner_id: "demo", plan: "pro", price_eur: 199, cash_fee_eur: 8,
-        status: "active", started_at: new Date().toISOString(), expires_at: null,
-      });
-      setFees({ partner_id: "demo", plan: "pro", cash_fee_eur: 8, nb_cash_bookings: 6, amount_due_eur: 48 });
-      setLoading(false);
-      return;
-    }
-    if (!userId) { setLoading(false); return; }
-    setLoading(true);
-    setError(null);
-    try {
-      const [s, f] = await Promise.all([
-        getMySubscription(userId),
-        getMyCashFeesThisMonth(userId),
-      ]);
-      setSub(s);
-      setFees(f);
-    } catch (e: any) {
-      setError(e.message ?? "Erreur de chargement de l'abonnement");
-    } finally {
-      setLoading(false);
-    }
-  }, [isDemo, userId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const contactToSubscribe = () => {
-    const subject = encodeURIComponent("Demande d'abonnement partenaire — Marbell'app");
-    Linking.openURL(`mailto:${SUBSCRIBE_EMAIL}?subject=${subject}`).catch(() => {
-      if (Platform.OS === "web") window.alert(`Écrivez-nous à ${SUBSCRIBE_EMAIL}`);
-      else Alert.alert("Contact", `Écrivez-nous à ${SUBSCRIBE_EMAIL}`);
-    });
-  };
-
-  if (loading) {
-    return <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={colors.primary} /></View>;
-  }
-  if (error) {
-    return (
-      <View style={{ paddingVertical: 40, alignItems: "center", gap: 10 }}>
-        <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} />
-        <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{error}</Text>
-        <TouchableOpacity onPress={load} activeOpacity={0.7}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
-          <Ionicons name="reload" size={14} color={colors.foreground} />
-          <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 13 }}>{t("common.retry") || "Réessayer"}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const nbCash    = fees?.nb_cash_bookings ?? 0;
-  const cashFee   = sub?.cash_fee_eur ?? fees?.cash_fee_eur ?? 0;
-  const amountDue = fees?.amount_due_eur ?? nbCash * cashFee;
-
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Formule actuelle */}
-      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10 }}>
-        FORMULE ACTUELLE
-      </Text>
-      {sub ? (
-        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: colors.primary, marginBottom: 20 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Ionicons name="ribbon-outline" size={22} color={colors.primary} />
-              <Text style={{ fontSize: 22, fontWeight: "800", color: colors.foreground }}>
-                {PLAN_LABELS[sub.plan] ?? sub.plan}
-              </Text>
-            </View>
-            <View style={{ backgroundColor: "rgba(74,222,128,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.success }}>Actif</Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: "row", gap: 24, marginTop: 16 }}>
-            <View>
-              <Text style={{ fontSize: 11, color: colors.muted }}>Abonnement</Text>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginTop: 2 }}>{sub.price_eur} € / mois</Text>
-            </View>
-            <View>
-              <Text style={{ fontSize: 11, color: colors.muted }}>Frais espèces</Text>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, marginTop: 2 }}>{sub.cash_fee_eur} € / résa</Text>
-            </View>
-          </View>
-        </View>
-      ) : (
-        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: colors.border, marginBottom: 20, alignItems: "center", gap: 8 }}>
-          <Ionicons name="ribbon-outline" size={28} color={colors.muted} />
-          <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Aucun abonnement</Text>
-          <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center" }}>
-            Souscrivez une formule pour activer le paiement à l'établissement et profiter de frais réduits.
-          </Text>
-        </View>
-      )}
-
-      {/* Réservations espèces du mois + montant dû */}
-      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10 }}>
-        CE MOIS-CI
-      </Text>
-      <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
-        <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
-          <Ionicons name="cash-outline" size={22} color={colors.muted} />
-          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.foreground, marginTop: 8 }}>{nbCash}</Text>
-          <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>Réservations espèces</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
-          <Ionicons name="wallet-outline" size={22} color={colors.primary} />
-          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.primary, marginTop: 8 }}>{amountDue} €</Text>
-          <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>Montant dû en fin de mois</Text>
-        </View>
-      </View>
-
-      {sub && (
-        <Text style={{ fontSize: 11, color: colors.muted, lineHeight: 17, marginBottom: 20 }}>
-          {nbCash} réservation(s) réglée(s) en espèces × {cashFee} € = {amountDue} € à régler à Marbell'app en fin de mois.
-        </Text>
-      )}
-
       {/* ── Paiements Stripe (Connect) ──────────────────────────── */}
       <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10 }}>
         PAIEMENTS STRIPE
@@ -2568,17 +2442,6 @@ function SubscriptionTab({ colors, isDemo, userId }: { colors: ReturnType<typeof
         )}
       </View>
 
-      {/* Contacter pour s'abonner / changer de formule */}
-      <TouchableOpacity
-        onPress={contactToSubscribe}
-        activeOpacity={0.85}
-        style={{ backgroundColor: colors.primary, borderRadius: 50, paddingVertical: 15, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
-      >
-        <Ionicons name="mail-outline" size={18} color={colors.onPrimary} />
-        <Text style={{ color: colors.onPrimary, fontWeight: "800", fontSize: 15 }}>
-          {sub ? "Contacter pour changer de formule" : "Contacter pour s'abonner"}
-        </Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -2591,7 +2454,7 @@ export default function PartnerDashboardScreen() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { profile } = useProfile(isDemoMode ? undefined : user?.id);
   const isAdmin = isDemoMode || profile?.role === "admin";
-  // Partenaire : voit l'onglet Abonnement (les admins aussi, pour le suivi).
+  // Partenaire : voit l'onglet Paiements (Stripe Connect ; les admins aussi, pour le suivi).
   const isPartner = isDemoMode || profile?.role === "partner";
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -2602,10 +2465,10 @@ export default function PartnerDashboardScreen() {
     { id: "tables",       label: t("partner.tabTables"),       icon: "🪑" },
     { id: "offers",       label: t("partner.tabOffers"),       icon: "👑" },
     { id: "photos",       label: "Photos",                     icon: "📷" },
-    // Statistiques + Abonnement — réservés aux partenaires (et admins pour le suivi).
+    // Statistiques + Paiements (Stripe Connect) — réservés aux partenaires (et admins pour le suivi).
     ...((isPartner || isAdmin) ? [
-      { id: "stats" as Tab,        label: t("partner.tabStats"), icon: "📈" },
-      { id: "subscription" as Tab, label: "Abonnement",          icon: "💰" },
+      { id: "stats" as Tab,    label: t("partner.tabStats"), icon: "📈" },
+      { id: "payments" as Tab, label: "Paiements",           icon: "💳" },
     ] : []),
     // Onglets réservés aux admins
     ...(isAdmin ? [
@@ -2713,7 +2576,7 @@ export default function PartnerDashboardScreen() {
           {activeTab === "offers"       && <OffersTab       colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
           {activeTab === "photos"       && <PhotosTab       colors={colors} isDemo={isDemoMode} userId={user?.id} />}
           {activeTab === "stats"        && (isPartner || isAdmin) && <StatsTab        colors={colors} isDemo={isDemoMode} isAdmin={isAdmin} userId={user?.id} />}
-          {activeTab === "subscription" && (isPartner || isAdmin) && <SubscriptionTab colors={colors} isDemo={isDemoMode} userId={user?.id} />}
+          {activeTab === "payments"     && (isPartner || isAdmin) && <PaymentsTab     colors={colors} isDemo={isDemoMode} />}
           {activeTab === "vip-posts"    && isAdmin && <VipPostsTab colors={colors} />}
           {activeTab === "clients"      && isAdmin && <ClientsTab colors={colors} isDemo={isDemoMode} />}
         </View>

@@ -63,9 +63,18 @@ export async function startConnectOnboarding(): Promise<string> {
   return url;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ Système d'abonnements Starter/Pro/Premium DÉSACTIVÉ pour l'instant.
+// getMySubscription / getMyCashFeesThisMonth ne sont plus appelés par l'app
+// (l'onglet dédié du dashboard partenaire a été retiré). Code + types conservés
+// pour une réactivation future (upsell). La table partner_subscriptions reste
+// en base, simplement inutilisée.
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Abonnement actif du partenaire connecté. La RLS (partner_id = auth.uid())
  * garantit qu'on ne lit que le sien. Renvoie null si aucun abonnement actif.
+ * (Actuellement non appelé — voir la note ci-dessus.)
  */
 export async function getMySubscription(
   partnerId: string
@@ -82,10 +91,10 @@ export async function getMySubscription(
 }
 
 /**
- * La venue accepte-t-elle le paiement sur place ("cash") ? Vrai uniquement si
- * son propriétaire a un abonnement partenaire actif. Passe par la RPC
- * SECURITY DEFINER venue_accepts_cash (la RLS de partner_subscriptions empêche
- * un client de lire l'abonnement directement). Renvoie false en cas d'erreur.
+ * La venue accepte-t-elle le paiement sur place ("cash") ? Depuis le découplage
+ * de l'abonnement, la RPC SECURITY DEFINER venue_accepts_cash renvoie true pour
+ * toute venue existante (voir supabase/venue_accepts_cash.sql). Renvoie false
+ * uniquement en cas d'erreur d'appel.
  */
 export async function venueAcceptsCash(venueId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("venue_accepts_cash", { p_venue_id: venueId });
