@@ -23,7 +23,9 @@ const stripe = new Stripe(
 
 const PRICE_1990 = Deno.env.get("STRIPE_VIP_PRICE_1990") ?? "";
 const PRICE_4990 = Deno.env.get("STRIPE_VIP_PRICE_4990") ?? "";
-const VIP_APP_URL = (Deno.env.get("VIP_APP_URL") ?? "https://marbellapp.vip").replace(/\/$/, "");
+// App Expo (routing SPA) → /vip-merci résout via le rewrite ; la landing statique
+// marbellapp.vip n'a pas cette route (404). Surchargable par le secret VIP_APP_URL.
+const VIP_APP_URL = (Deno.env.get("VIP_APP_URL") ?? "https://app.marbellapp.vip").replace(/\/$/, "");
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
