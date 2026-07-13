@@ -2396,6 +2396,12 @@ function VipSubscribersTab({ colors, isDemo }: { colors: ReturnType<typeof useCo
     }
   };
 
+  const openLink = () => {
+    if (!genUrl) return;
+    if (Platform.OS === "web") window.open(genUrl, "_blank");
+    else Linking.openURL(genUrl).catch(() => notify(genUrl));
+  };
+
   const inputStyle = {
     backgroundColor: colors.background, color: colors.foreground, borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, borderWidth: 1, borderColor: colors.border,
@@ -2420,11 +2426,18 @@ function VipSubscribersTab({ colors, isDemo }: { colors: ReturnType<typeof useCo
             <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.border }}>
               <Text style={{ fontSize: 12, color: colors.foreground }} numberOfLines={2}>{genUrl}</Text>
             </View>
-            <TouchableOpacity onPress={copyLink} activeOpacity={0.85}
-              style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 50, paddingVertical: 10, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}>
-              <Ionicons name="copy-outline" size={16} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>Copier le lien</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity onPress={copyLink} activeOpacity={0.85}
+                style={{ flex: 1, borderWidth: 1, borderColor: colors.primary, borderRadius: 50, paddingVertical: 10, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}>
+                <Ionicons name="copy-outline" size={16} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>Copier le lien</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={openLink} activeOpacity={0.85}
+                style={{ flex: 1, borderWidth: 1, borderColor: colors.primary, borderRadius: 50, paddingVertical: 10, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}>
+                <Ionicons name="open-outline" size={16} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 14 }}>Ouvrir le lien</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : null}
       </View>
