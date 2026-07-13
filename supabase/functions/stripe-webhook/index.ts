@@ -52,6 +52,15 @@ serve(async (req: Request) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // ── VIP News (abonnement client) : discriminé par mode "subscription" +
+        //    metadata VIP. N'interfère JAMAIS avec la réservation ci-dessous
+        //    (mode "payment" + bookingId). Traité puis on sort.
+        if (session.mode === "subscription" && session.metadata?.vip_upgrade_price_id && admin) {
+          await handleVipCheckout(session);
+          break;
+        }
+
         const bookingId = session.metadata?.bookingId;
         // ÉTAPE 1 du flow : paiement reçu. La réservation RESTE 'pending' — elle
         // n'est confirmée qu'après validation manuelle de la venue (étape 2,
@@ -159,6 +168,31 @@ serve(async (req: Request) => {
         }
         break;
       }
+      // ── VIP News : bascule de phase (M6 : 19,90→49,90) + changements de statut ──
+      case "customer.subscription.updated": {
+        if (!admin) break;
+        const sub = event.data.object as Stripe.Subscription;
+        const priceId = sub.items.data[0]?.price?.id ?? null;
+        const { data: rows, error: uErr } = await admin
+          .from("vip_subscriptions")
+          .update({ status: sub.status, current_price_id: priceId, updated_at: new Date().toISOString() })
+          .eq("stripe_subscription_id", sub.id)
+          .select("id");
+        if (uErr) console.error(`[webhook] VIP subscription.updated ${sub.id}:`, uErr.message);
+        else console.warn(`[webhook] VIP subscription.updated ${sub.id} → ${rows?.length ?? 0} ligne(s) (status=${sub.status}, price=${priceId})`);
+        break;
+      }
+      case "customer.subscription.deleted": {
+        if (!admin) break;
+        const sub = event.data.object as Stripe.Subscription;
+        const { error: dErr } = await admin
+          .from("vip_subscriptions")
+          .update({ status: "canceled", updated_at: new Date().toISOString() })
+          .eq("stripe_subscription_id", sub.id);
+        if (dErr) console.error(`[webhook] VIP subscription.deleted ${sub.id}:`, dErr.message);
+        else console.warn(`[webhook] VIP subscription.deleted ${sub.id} → canceled`);
+        break;
+      }
       default:
         // Autres événements ignorés.
         break;
@@ -174,3 +208,64 @@ serve(async (req: Request) => {
     headers: { "Content-Type": "application/json" },
   });
 });
+
+// ── VIP News — traite un checkout.session.completed (mode subscription) : crée le
+//    Subscription Schedule (phase 1 = prix actuel jusqu'à trial_end + N mois, trial
+//    préservé ; phase 2 = 49,90€ puis end_behavior "release" = indéfini) et
+//    enregistre l'abonné dans vip_subscriptions. Idempotent (skip si déjà traité).
+async function handleVipCheckout(session: Stripe.Checkout.Session): Promise<void> {
+  if (!admin) return;
+  const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
+  const upgradePriceId = session.metadata?.vip_upgrade_price_id;
+  const afterMonths = parseInt(session.metadata?.vip_upgrade_after_months ?? "6") || 6;
+  if (!subscriptionId || !upgradePriceId) return;
+
+  // Idempotence : déjà enregistré (retry webhook) → stop.
+  const { data: existingRow } = await admin
+    .from("vip_subscriptions").select("id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
+  if (existingRow) {
+    console.warn(`[webhook] VIP ${subscriptionId} déjà traité — skip`);
+    return;
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const currentPriceId = subscription.items.data[0]?.price?.id ?? null;
+
+  // Crée le schedule seulement s'il n'est pas déjà attaché (double idempotence).
+  let scheduleId = typeof subscription.schedule === "string" ? subscription.schedule : null;
+  if (!scheduleId && currentPriceId) {
+    const sched = await stripe.subscriptionSchedules.create({ from_subscription: subscriptionId });
+    const startDate = sched.phases[0].start_date;
+    const trialEnd = subscription.trial_end ?? undefined;
+    const base = trialEnd ?? startDate;
+    const d = new Date(base * 1000);
+    d.setMonth(d.getMonth() + afterMonths);
+    const phase1End = Math.floor(d.getTime() / 1000);
+    const updated = await stripe.subscriptionSchedules.update(sched.id, {
+      end_behavior: "release",
+      phases: [
+        {
+          items: [{ price: currentPriceId, quantity: 1 }],
+          start_date: startDate,
+          ...(trialEnd ? { trial_end: trialEnd } : {}),
+          end_date: phase1End,
+        },
+        { items: [{ price: upgradePriceId, quantity: 1 }] },
+      ],
+    });
+    scheduleId = updated.id;
+  }
+
+  const email = session.customer_details?.email ?? session.customer_email ?? "";
+  const { error: insErr } = await admin.from("vip_subscriptions").insert({
+    name: session.metadata?.vip_name ?? null,
+    email,
+    stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : null,
+    stripe_subscription_id: subscriptionId,
+    stripe_schedule_id: scheduleId,
+    status: subscription.status,
+    current_price_id: currentPriceId,
+  });
+  if (insErr) console.error(`[webhook] VIP insert failed ${subscriptionId}:`, insErr.message);
+  else console.warn(`[webhook] VIP ${subscriptionId} enregistré (status ${subscription.status}, schedule ${scheduleId})`);
+}
