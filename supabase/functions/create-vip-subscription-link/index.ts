@@ -83,6 +83,10 @@ serve(async (req: Request) => {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customer.id,
+      // Carte + prélèvement SEPA (IBAN). SEPA doit être activé sur le compte
+      // Stripe (Settings → Payment methods). Le mandat est confirmé au checkout ;
+      // le 1er prélèvement n'intervient qu'à la fin de l'essai (7 j).
+      payment_method_types: ["card", "sepa_debit"],
       line_items: [{ price: PRICE_1990, quantity: 1 }],
       subscription_data: { trial_period_days: 7, metadata: vipMeta },
       metadata: vipMeta,

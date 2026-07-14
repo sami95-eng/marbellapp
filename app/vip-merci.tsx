@@ -34,6 +34,10 @@ export default function VipMerciScreen() {
           Ensuite : 19,90€/mois pendant 6 mois, puis 49,90€/mois. Annulable à tout moment.
         </Text>
 
+        <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center", lineHeight: 18, opacity: 0.85 }}>
+          Paiement par prélèvement SEPA : le premier prélèvement intervient après l'essai et peut mettre quelques jours ouvrés à apparaître sur ton relevé.
+        </Text>
+
         <TouchableOpacity
           onPress={() => router.replace("/(tabs)" as any)}
           activeOpacity={0.85}
